@@ -1,0 +1,94 @@
+#!/bin/sh
+# Front end tests of anchorc, run by make test after make. Files go to
+# build/test. Each run stays far under 4 GB: the arena of one run takes at
+# most ANCHOR_ARENA_MAX (256 MiB, src/syntax.h).
+set -u
+root=$(cd "$(dirname "$0")/.." && pwd)
+tool=$root/build/parsetool
+anchorc=$root/build/anchorc
+out=$root/build/test
+mkdir -p "$out"
+failures=0
+
+pass() { printf 'ok   %s\n' "$1"; }
+fail() { printf 'FAIL %s\n' "$1"; failures=$((failures + 1)); }
+
+# check NAME STATUS WANT_STATUS ERRFILE WANT_PREFIX
+check() {
+  err=$(cat "$4")
+  case $err in
+    "$5"*) prefix_ok=1 ;;
+    *) prefix_ok=0 ;;
+  esac
+  if [ "$2" -eq "$3" ] && [ "$prefix_ok" -eq 1 ]; then pass "$1"; else fail "$1: exit $2, stderr: $err"; fi
+}
+
+# Parse, print, parse the print and print again: the two prints are the same.
+for file in prelude/Prelude.anc test/parser-arms.anc; do
+  name=$(basename "$file" .anc)
+  "$tool" "$root/$file" > "$out/$name.1" 2> "$out/$name.err"
+  first=$?
+  "$tool" "$out/$name.1" > "$out/$name.2" 2>> "$out/$name.err"
+  second=$?
+  if [ "$first" -eq 0 ] && [ "$second" -eq 0 ] && cmp -s "$out/$name.1" "$out/$name.2"; then
+    pass "parse and round trip $file ($(wc -l < "$out/$name.1" | tr -d ' ') lines)"
+  else
+    fail "parse and round trip $file: exit $first $second, $(cat "$out/$name.err")"
+  fi
+done
+
+if "$tool" --prelude | cmp -s - "$root/prelude/Prelude.anc"; then
+  pass "the embedded prelude is prelude/Prelude.anc"
+else
+  fail "the embedded prelude is prelude/Prelude.anc"
+fi
+
+# refuse NAME CODE DEF TEXT: parsetool exits 1 with "anchorc: CODE: DEF: ".
+refuse() {
+  printf '%s\n' "$4" > "$out/$1.anc"
+  "$tool" "$out/$1.anc" > /dev/null 2> "$out/$1.err"
+  check "$1 is $2" $? 1 "$out/$1.err" "anchorc: $2: $3: $out/$1.anc:"
+}
+
+refuse bad-token LEX_TOKEN x 'def x : Nat := natAdd 1 $ 2'
+refuse big-number LEX_NUMBER x 'def x : Nat := 123456789012345678901234567890'
+refuse unclosed-paren PARSE_PAREN x 'def x : Nat := natAdd (natAdd 1 2'
+refuse unmatched-paren PARSE_PAREN x 'def x : Nat := natAdd 1 2)'
+refuse missing-define PARSE_EXPECT x "$(printf 'def x : Nat\ndef y : Nat := 3')"
+refuse missing-term PARSE_EXPECT x 'def x : Nat :='
+refuse tuple-arity PARSE_ARITY x 'def x : prod (Nat, Nat) := tuple (1)'
+refuse inj-arity PARSE_ARITY x 'def x : Nat := inj 2 of 2 x'
+refuse case-arity PARSE_ARITY x 'def x : Nat := case s with | 1 (a : Nat) => a | 0 (b : Nat) => b'
+refuse missing-match-arm PARSE_EXPECT x 'def x : Nat := case s with | 0 (a : Nat) => match a as z in F return Nat with | 1 (b : Nat) => b'
+refuse deep-parens PARSE_DEPTH x "def x : Nat := $(awk 'BEGIN { for (i = 0; i < 100000; i++) printf "("; printf "0"; for (i = 0; i < 100000; i++) printf ")" }')"
+refuse deep-arrows PARSE_DEPTH x "def x : $(awk 'BEGIN { for (i = 0; i < 5000; i++) printf "Nat -> " }')Nat := 0"
+refuse long-spine PARSE_DEPTH x "def x : Nat := f$(awk 'BEGIN { for (i = 0; i < 5000; i++) printf " 0" }')"
+
+# anchorc: usage and IO exit 2, a verb exits 1 with PLANNED until its back end lands.
+"$anchorc" > /dev/null 2> "$out/usage.err"
+check "anchorc with no verb is usage" $? 2 "$out/usage.err" "anchorc: USAGE: -: "
+"$anchorc" frob x > /dev/null 2> "$out/usage.err"
+check "anchorc frob is usage" $? 2 "$out/usage.err" "anchorc: USAGE: -: "
+"$anchorc" eval x > /dev/null 2> "$out/usage.err"
+check "anchorc eval without NAME is usage" $? 2 "$out/usage.err" "anchorc: USAGE: -: "
+"$anchorc" abi x y > /dev/null 2> "$out/usage.err"
+check "anchorc abi with NAME is usage" $? 2 "$out/usage.err" "anchorc: USAGE: -: "
+"$anchorc" build x --runtime > /dev/null 2> "$out/usage.err"
+check "anchorc build without -o is usage" $? 2 "$out/usage.err" "anchorc: USAGE: -: "
+"$anchorc" check "$out/no-such-file.anc" > /dev/null 2> "$out/io.err"
+check "anchorc check of a missing file is IO" $? 2 "$out/io.err" "anchorc: IO_READ: -: "
+"$anchorc" check "$out/bad-token.anc" > /dev/null 2> "$out/refused.err"
+check "anchorc check of a bad file is refused" $? 1 "$out/refused.err" "anchorc: LEX_TOKEN: x: "
+printf 'def members : Nat := 3\n' > "$out/program.anc"
+for verb in check table abi; do
+  "$anchorc" $verb "$out/program.anc" > /dev/null 2> "$out/verb.err"
+  check "anchorc $verb is PLANNED" $? 1 "$out/verb.err" "anchorc: PLANNED: -: "
+done
+"$anchorc" eval "$out/program.anc" members > /dev/null 2> "$out/verb.err"
+check "anchorc eval is PLANNED" $? 1 "$out/verb.err" "anchorc: PLANNED: -: "
+"$anchorc" build "$out/program.anc" --runtime -o "$out/x.hex" > /dev/null 2> "$out/verb.err"
+check "anchorc build is PLANNED" $? 1 "$out/verb.err" "anchorc: PLANNED: -: "
+
+if [ "$failures" -eq 0 ]; then echo "parse.sh: all passed"; exit 0; fi
+echo "parse.sh: $failures failed"
+exit 1

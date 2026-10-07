@@ -35,8 +35,8 @@ A program is a sequence of definitions:
 def NAME : TYPE := TERM
 ```
 
-The surface is the escrow-lang surface at commit cfe211b (the grammar
-comment in `src/syntax.h`), with the suffix `.anc`. The first definition is
+The surface is the grammar comment in `src/syntax.h` (origin: section
+8), with the suffix `.anc`. The first definition is
 `def members : Nat := N` with 1 <= N. The program then gives the candidate
 policies and `def rule : Tally -> Outcome`.
 
@@ -144,7 +144,7 @@ pair slots. Nothing else. Chunk 5 (section 10) fixes the slot numbers.
 
 The compiler tabulates `Gov` over every tally at compile time. The runtime
 reads the outcome code of the current tally from a table at the end of the
-runtime code by `CODECOPY` (the escrow-lang form). For each candidate the
+runtime code by `CODECOPY`. For each candidate the
 table also holds the policy fields that a guard reads.
 
 Types, `Eq` proofs and universes erase. The `Anchored` log is
@@ -204,11 +204,21 @@ staged, and a status line here. The USER commits.
 | Milestone | Chunk | Content |
 |---|---|---|
 | M0 | 0 | This SPEC, `design/DESIGN.md` (the design, verbatim), `formers/FORMERS.md` |
-| M1 | 1 | Copy the escrow-lang compiler at cfe211b; rename to `anchorc` and `.anc`; Makefile (tcc build, check-clang); gate: `tcc -Wall -Werror`, parse tests, keccak vectors |
+| M1 | 1 | Copy the origin compiler of section 8; rename to `anchorc` and `.anc`; Makefile (tcc build, check-clang); gate: `tcc -Wall -Werror`, parse tests, keccak vectors |
 | M1 | 2 | `prelude/Prelude.anc` (sections 5 and 6), examples (one fate each, one `REFUSE_FORK` mutant), parse round trips |
-| M1 | 3 | Checker (bidirectional, conversion by normalization) and the refusals of section 2; `formers/tcc-evm.md`; `probe/CAPABILITY.md`. If escrow-lang chunk 3 lands first, port its checker |
+| M1 | 3 | Checker (bidirectional, conversion by normalization) and the refusals of section 2; `formers/tcc-evm.md`; `probe/CAPABILITY.md`. If the origin compiler of section 8 gets a checker first, port it |
 | M2 | 4 | Evaluator, tabulation, fate report: `anchorc check`, `table`, `eval` |
 | M2 | 5 | Contract writer: entries, storage, outcome table, `Anchored` log; `anchorc build`, `abi` |
 | M3 | 6 | Differential tests against geth `evm` on call traces; law tests (monotone, idempotent, distinct anchors commute, no deletion, `amend` is the identity on the log, no admit at a `two` tally); deploy test; docs |
 
 Status 2026-10-07: chunk 0 staged.
+
+Status 2026-10-07: chunk 1 staged. The front end, keccak and EVM
+assembler of the origin compiler (section 8), renamed to `anchorc` and `.anc`. `src/evm.h` exports
+the assembler and the target interface `anchor_evm_write`; its runtime has no
+entry yet (every call reverts), and chunk 5 fills it. The prelude is a
+placeholder (`def members : Nat := 1`) until chunk 2. Verbs `check`, `table`,
+`eval`, `build`, `abi` parse the prelude and PROG, then exit 1 with
+`PLANNED`. Gate GREEN: `make` (tcc `-Wall -Werror`), `make check-clang`,
+`make test` (parse.sh 28 cases, evm.sh 5 cases: keccak vectors and the bytes
+of the contract with no entry).

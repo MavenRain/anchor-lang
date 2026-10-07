@@ -1,0 +1,41 @@
+# anchorc with TinyCC (SPEC section 8). make builds build/anchorc,
+# build/parsetool and build/evmtool, make check-clang checks every C file
+# with clang, and make test runs test/parse.sh and test/evm.sh.
+TCC = tcc
+CLANG = cc
+TCCFLAGS = -std=c99 -Wall -Werror
+CLANGFLAGS = -std=c99 -Wall -Wextra -Wswitch-enum -Werror -fsyntax-only
+
+FRONT = src/arena.c src/diag.c src/lexer.c src/parser.c src/printer.c
+BACK = src/evm.c src/keccak.c
+ANCHORC = $(FRONT) $(BACK) src/main.c
+HEADERS = src/arena.h src/evm.h src/keccak.h src/prelude.h src/syntax.h
+PRELUDE = prelude/Prelude.anc
+
+all: build/anchorc build/parsetool build/evmtool
+
+build/prelude.c: tools/embed.c src/prelude.h $(PRELUDE)
+	mkdir -p build
+	$(TCC) $(TCCFLAGS) -run tools/embed.c $(PRELUDE) $@
+
+build/anchorc: $(ANCHORC) $(HEADERS) build/prelude.c
+	$(TCC) $(TCCFLAGS) -o $@ $(ANCHORC) build/prelude.c
+
+build/parsetool: $(FRONT) test/parsetool.c $(HEADERS) build/prelude.c
+	$(TCC) $(TCCFLAGS) -o $@ $(FRONT) test/parsetool.c build/prelude.c
+
+build/evmtool: $(BACK) test/evmtool.c src/evm.h src/keccak.h
+	mkdir -p build
+	$(TCC) $(TCCFLAGS) -o $@ $(BACK) test/evmtool.c
+
+check-clang: build/prelude.c
+	$(CLANG) $(CLANGFLAGS) src/*.c test/*.c tools/*.c build/prelude.c
+
+test: build/anchorc build/parsetool build/evmtool
+	sh test/parse.sh
+	sh test/evm.sh
+
+clean:
+	rm -rf build
+
+.PHONY: all check-clang test clean

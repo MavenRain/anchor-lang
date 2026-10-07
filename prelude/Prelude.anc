@@ -1,0 +1,3 @@
+-- The anchor-lang prelude: a placeholder until chunk 2 (SPEC section 10)
+-- writes the types and operations of SPEC sections 5 and 6.
+def members : Nat := 1

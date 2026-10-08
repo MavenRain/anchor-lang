@@ -14,10 +14,10 @@ Status: draft. The front end (lexer, parser, printer), the EVM assembler and
 the checker build. The checker refuses the forms of `SPEC.md` section 2. The
 `anchorc check` prints the fate report, `anchorc table` prints the outcome
 of each tally and `anchorc eval` prints the normal form of a def (`SPEC.md`
-sections 6 and 7). `anchorc abi` prints the entries of the contract and
-`anchorc build` writes its creation code or runtime code as hex (chunk 5a,
-`SPEC.md` section 7). The `anchor` entry reverts until chunk 5b. See `SPEC.md` section 10 for the
-milestones.
+sections 6 and 7). `anchorc abi` prints the entries and the log of the contract, and
+`anchorc build` writes its creation code or runtime code as hex, with the
+outcome table at the end of the runtime (chunk 5, `SPEC.md` section 7).
+See `SPEC.md` section 10 for the milestones.
 
 ## Build
 
@@ -25,7 +25,10 @@ milestones.
 `make check-clang` checks every C file with
 `cc -std=c99 -Wall -Wextra -Wswitch-enum -Werror -fsyntax-only`.
 `make test` runs `test/parse.sh`, `test/evm.sh`, `test/check.sh`,
-`test/table.sh`, `test/eval.sh` and `test/build.sh`.
+`test/table.sh`, `test/eval.sh`, `test/build.sh` and `test/run.sh`.
+`test/run.sh` runs the contract on geth `evm` (1.14.12), so `make test`
+needs `evm` on the PATH to run it. Without `evm`, `test/run.sh` prints a
+message and exits 0.
 
 ## Layout
 
@@ -40,7 +43,7 @@ milestones.
   `check.c` is the checker, the table, the fate report and `eval`, and
   `check.h` its interface;
   `evm.c` is the EVM assembler and the contract writer (constructor,
-  dispatch, entries, `abi` text); `keccak.c` is
+  dispatch, entries, outcome table, `abi` text); `keccak.c` is
   Keccak-256; `main.c` is the command line; `prelude.h` declares the
   embedded prelude.
 - `prelude/Prelude.anc`: the prelude (the types and operations of SPEC
@@ -56,8 +59,9 @@ milestones.
   `rule-type.anc` (`TYPE_MISMATCH`).
 - `tools/embed.c`: writes the prelude as C (`build/prelude.c`).
 - `test/`: `parse.sh` (round trips, parse refusals, command line exits),
-  `evm.sh` (keccak vectors, the bytes of the contract), `build.sh` (`abi`
-  and `build` of each program and mutant, the EIP-3860 bound), `check.sh` (the prelude, the
+  `evm.sh` (keccak vectors, the bytes of the contract, the EIP-170
+  bound), `build.sh` (`abi` and `build` of each program and mutant, the
+  EIP-3860 bound), `run.sh` (the contract on geth `evm`), `check.sh` (the prelude, the
   programs, the mutants and the checker regressions), `table.sh` (the
   table of each program, the mutants under `table`, `TABLE_LIMIT`), `eval.sh` (the normal
   form of each def, `EVAL_NAME`, the mutants under `eval`), and the drivers

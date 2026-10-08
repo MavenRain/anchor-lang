@@ -1710,13 +1710,27 @@ int anchor_table(AnchorChecked *c, AnchorTable *t) {
   return ANCHOR_EXIT_OK;
 }
 
-int anchor_candidates(AnchorChecked *c, size_t *k) {
-  *k = 0;
-  if (c->failed)
-    return ANCHOR_EXIT_REFUSED;
-  c->def = span_of("candidates");
-  c->loc = find_global(c, "candidates")->decl->loc;
-  return candidate_policies(c, k) == NULL ? ANCHOR_EXIT_REFUSED : ANCHOR_EXIT_OK;
+static int policy_app(const Ast *a) { return a != NULL && a->kind == AST_APP; }
+
+static int policy_var(const Ast *a, const char *name) {
+  int var = a != NULL && a->kind == AST_VAR;
+  return var && strcmp(a->u.name, name) == 0;
+}
+
+int anchor_policy_fields(const AnchorTable *t, size_t i, int *allow, unsigned long long *schema) {
+  const Ast *args[6] = {NULL, NULL, NULL, NULL, NULL, NULL};
+  const Ast *head = i < t->npolicies ? t->policies[i] : NULL;
+  size_t n = 6;
+  while (n > 0 && policy_app(head)) {
+    n--;
+    args[n] = head->u.app.arg;
+    head = head->u.app.fun;
+  }
+  int nat = args[4] != NULL && args[4]->kind == AST_NAT;
+  *allow = policy_var(args[0], "allow");
+  *schema = nat ? args[4]->u.nat : 0;
+  int fields = nat && (*allow || policy_var(args[0], "deny"));
+  return n == 0 && policy_var(head, "mkPolicy") && fields ? 0 : 1;
 }
 
 static const char *const FATES[3] = {"none", "one", "two"};

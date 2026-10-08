@@ -53,10 +53,11 @@ typedef struct {
  * CHECKED. */
 int anchor_table(AnchorChecked *checked, AnchorTable *table);
 
-/* The number of candidates in *K, without the table (anchorc build and abi
- * until chunk 5b). Returns ANCHOR_EXIT_OK, or ANCHOR_EXIT_REFUSED with
- * TABLE_LIMIT, TABLE_STUCK or MEMORY. */
-int anchor_candidates(AnchorChecked *checked, size_t *k);
+/* The two fields of policy I of T that the contract reads (anchorc build
+ * and abi): *ALLOW is 1 for allow and 0 for deny, *SCHEMA is the schema.
+ * Policy I must be the normal form mkPolicy v d c window schema forkFreeze
+ * with v allow or deny and schema a Nat. Returns 0, else nonzero. */
+int anchor_policy_fields(const AnchorTable *t, size_t i, int *allow, unsigned long long *schema);
 
 /* The stable text form of SPEC section 7. */
 void anchor_print_table(FILE *out, const AnchorTable *table);

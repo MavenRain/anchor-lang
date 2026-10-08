@@ -99,8 +99,9 @@ The type formers are F1 to F15 of `formers/FORMERS.md`. This language uses a
 new host column, `tcc-evm`. `formers/tcc-evm.md` gives a status and the
 evidence for each former. A status is for the checker of chunk 3. The
 evaluator of chunk 4 uses the normalizer of the checker. The contract
-writer of chunk 5a uses no former. The outcome table in the contract
-(chunk 5b) is PLANNED.
+writer of chunk 5 uses no former at run time. The compiler tabulates the
+outcomes (chunk 4a), and the runtime reads them from the outcome table
+(section 7).
 
 | ID | Status on tcc-evm | Effect on this language | Open item |
 |---|---|---|---|
@@ -231,9 +232,9 @@ of `anchor`.
 
 | Entry | Guards | Effect |
 |---|---|---|
-| `anchor(bytes32)` returns `uint256` | caller is a member; `h != 0`; `admit` at the current tally | sets the slot of `keccak256(h, t)` with `t = TIMESTAMP`; logs `Anchored(bytes32,uint256)`; returns `t` |
+| `anchor(bytes32)` returns `uint256` | caller is a member; `h != 0`; `admit` gives `flagYes` at the current tally (the outcome is `one p` and `p.admit` is `allow`) | when the pair slot of `(h, t)` with `t = TIMESTAMP` is 0, sets it to 1 and logs `Anchored(bytes32,uint256)`; returns `t` |
 | `verify(bytes32,uint256)` returns `uint256` | none | returns 1 if the slot of `keccak256(h, t)` is set, else 0 |
-| `cast(uint256)` | caller is a member; ballot less than the number of candidates; O6 (chunk 5b) | changes the ballot and the tally counts |
+| `cast(uint256)` | caller is a member; ballot less than the number of candidates; O6 when the outcomes before and after the move are both `one` (below) | changes the ballot and the tally counts |
 
 Storage holds the member addresses, the ballots, the tally counts and the
 pair slots. Nothing else. The slot numbers (chunk 5a) are my choice, not
@@ -259,42 +260,126 @@ tally starts at `(members, 0, ..., 0)` (O10).
 
 The dispatch order is `anchor`, `verify`, `cast`. An unknown selector
 reverts. `cast(c)` moves the ballot of the caller from `old` to `c`: the
-count of `old` goes down by 1 and the count of `c` goes up by 1. The O6
-guard reads the outcome table, so chunk 5b adds it. `anchor(bytes32)` is in
-the dispatch, but it reverts until chunk 5b adds its guards, the pair slot
-and the log.
+count of `old` goes down by 1 and the count of `c` goes up by 1. Then the
+O6 guard (below) compares the outcome before the move with the outcome
+after the move.
+
+`anchor(h)` reverts when the caller is not a member, when `h` is 0, and
+when `admit` does not give `flagYes` at the current tally (O9). Then it
+reads `t = TIMESTAMP`. When the pair slot of `(h, t)` is 0, it sets the
+slot to 1 and logs `Anchored`. When the slot is 1 (the same `h` in the
+same block), it does not write and it does not log (my choice, not
+ruled: a second insert of a pair does not change the log). In both cases
+it returns `t`. The log is `LOG2` (my choice, not ruled): topic 0 is
+`keccak256("Anchored(bytes32,uint256)")`, topic 1 is `h`, and the data is
+`t` as one 32-byte word. The writer pushes topic 0 with the shortest
+`PUSH` that holds it (my choice, not ruled).
 
 `anchorc abi PROG` prints one line for the constructor, then one line for
 each entry in the order of the dispatch (my choice, not ruled). A selector
 is 8 lowercase hex digits: the first 4 bytes of `keccak256` of the
-signature. `-` is no output. Chunk 5b adds a line for the `Anchored` log.
-For 3 members:
+signature. `-` is no output. The last line is the `Anchored` log: the
+signature, `topic` and topic 0 as 64 lowercase hex digits, `indexed` and
+the type of topic 1, then `data` and the type of the data (my choice, not
+ruled). For 3 members:
 
     constructor inputs address[3]
     entry anchor(bytes32) selector eecdf927 inputs bytes32 outputs uint256
     entry verify(bytes32,uint256) selector 382262fc inputs bytes32,uint256 outputs uint256
     entry cast(uint256) selector 738198b4 inputs uint256 outputs -
+    event Anchored(bytes32,uint256) topic fde54488b5523b3abf19b99976dd0e2c531fbcd233d0eb682c96c3a18cf6b3c1 indexed bytes32 data uint256
 
 `anchorc build PROG [--runtime] -o OUT` writes the creation code to OUT as
 lowercase hex, or the runtime code with `--runtime`. The creation code ends
 with the runtime code. When the back end refuses, OUT is removed. `abi` and
 `build` run after `anchor_check` and read `members` and the candidates.
-They do not tabulate until chunk 5b. Thus a refusal that only the table
-finds (a stuck outcome or a fork, section 2) does not stop `build` in
-chunk 5a.
+Then they tabulate one time, as `table` does. A table refusal
+(`TABLE_LIMIT`, `TABLE_STUCK`, `REFUSE_FORK`) stops them with its code.
 
 Bounds of the back end (my choice, not ruled, from the EIPs): the runtime
-code is at most 24576 bytes (EIP-170) and the creation code with the
-member words is at most 49152 bytes (EIP-3860), else `EVM_SIZE`. With the
-candidates of `examples/programs/arrow-debreu.anc`, 1527 members pass and
-1528 members are `EVM_SIZE`. 0 members or 0 candidates is `EVM_LIMIT`.
-`abi` applies no code bound. A back-end error is
-`anchorc: CODE: -: message`.
+code with the table bytes is at most 24576 bytes (EIP-170), else
+`EVM_SIZE` with the message
+`the runtime has B bytes, the limit is 24576`. The writer checks this
+bound before it writes the table, so a large table does not start a long
+loop. The creation code with the member words is at most 49152 bytes
+(EIP-3860), else `EVM_SIZE` with the message
+`the creation code and N member words have B bytes, the limit is 49152 (EIP-3860)`.
+The writer checks the runtime bound first. With 1 member and 1
+candidate, the runtime has 560 bytes and the creation code has 659 bytes
+(`test/evm.sh`). The table grows with the members, so the edges are not
+fixed numbers. `test/build.sh` finds the EIP-3860 edge N of
+`examples/programs/arrow-debreu.anc` by bisection over 256 to 4095
+members, then checks that N members pass and N + 1 members are
+`EVM_SIZE`. With 2 candidates the EIP-3860 bound fails first, because
+each member word has 32 bytes. Thus `test/evm.sh` tells the two bounds
+apart by the message: at the EIP-170 edge N with 2 candidates, N members
+give the EIP-3860 message and N + 1 members give `the runtime has`.
+0 members or 0 candidates is `EVM_LIMIT`. `abi` applies no code bound. A
+back-end error is `anchorc: CODE: -: message`.
 
-The compiler tabulates `Gov` over every tally at compile time. The runtime
-reads the outcome code of the current tally from a table at the end of the
-runtime code by `CODECOPY`. For each candidate the
-table also holds the policy fields that a guard reads.
+The compiler tabulates `Gov` over every tally at compile time (see
+`anchorc table` below). The runtime reads the outcome of the current
+tally and the policy fields that a guard reads from table bytes at the
+end of the runtime code, by `CODECOPY`. Each item of this list is my
+choice, not ruled:
+
+- The table bytes come after the last instruction. The rank subroutine
+  ends with `JUMP`, so control never goes into the data. The table bytes
+  count toward the EIP-170 bound.
+- The table has three parts, each at a label: the binomial part, the rows
+  and the policy records. Numbers are big-endian.
+- Binomial part: for d = 1 to K - 1 and S = 0 to M, 2 bytes hold
+  C(S + d - 1, d), at offset 2((d - 1)(M + 1) + S). The part is empty
+  when K = 1. The writer computes a term with
+  `c = 1; for j = 1..d while c <= 0xffff: c = c * (S - 1 + j) / j`
+  (exact; S = 0 gives 0) and clamps it at 0xffff.
+- Rows: one row for each tally, in the order of `anchorc table`, 5
+  bytes: the fate (1 byte: 0 `none`, 1 `one`, 2 `two`), then `p` and `q`
+  (2 bytes each, 0 when not used).
+- Policy records: one record for each policy number, 9 bytes: `admit` (1
+  byte: 1 `allow`, 0 `deny`), then `schema` (8 bytes). The guards read
+  only these two fields: `hashDom` and `clock` have one value (O4, O1),
+  `forkFreeze` is forced (O2), and no entry reads `window` (O7).
+- The widths are sufficient because `TABLE_LIMIT` is 4096. There are at
+  most K + 2 x rows <= 12288 policies, less than 65536. Each term that
+  the runtime reads is at most the rank, which is less than 4096. `Nat`
+  has 64 bits. Thus the writer needs no new bound.
+- The row of the current tally is its rank in reverse lexicographic
+  order. The runtime computes the rank from the K count slots:
+  rank = sum for d = 1 to K - 1 of C(S_d + d - 1, d), where S_d is the
+  sum of the last d counts. For K = 2 the rank is c1, and the rank of
+  `(M, 0, ..., 0)` is 0. Thus storage gets no new slot.
+- A rank subroutine after the last entry computes the rank. `anchor` and
+  `cast` call it. Memory 0x40 to 0x5f holds the word of each `CODECOPY`;
+  memory 0x00 to 0x3f holds the `keccak256` inputs of the slots. The
+  writer uses 18 of its 64 labels.
+- The writer refuses no table with `EVM_USAGE` (`no outcome table`), and
+  a row that names a policy with no record with `EVM_INTERNAL` (`a row of
+  the outcome table names no policy`). The test driver `evmtool` makes
+  C(N + K - 1, K - 1) `none` rows and K `deny` policies, at most 65536
+  rows.
+
+The O6 guard of `cast` (my choice, not ruled): `cast` computes the rank
+before the move and after the move. When both rows are `one`, it reverts
+when the `schema` of the new policy is less than the `schema` of the old
+policy. A `none` or `two` row has no schema, so the guard does not apply
+to it. Thus a path of casts through a `none` tally can lower the schema.
+
+`test/run.sh` runs the runtime code on geth `evm run --prestate`. The
+prestate puts the code and the storage words (32 bytes each) in the
+alloc. The block timestamp is 4660. At a `one` tally with an `allow`
+policy, `anchor` returns `t`, makes 1 `LOG2` (topic 1 is `h`, the data is
+`t`) and sets one more slot to 1, and then `verify(h, t)` returns 1. A
+second `anchor` of the same `h` returns `t` and makes no log. `anchor`
+reverts for a caller that is not a member, for `h = 0`, at a `one` tally
+with a `deny` policy, at a `none` tally and at a `two` tally. The O6
+cases use a variant of `arrow-debreu.anc` in which the `closedLog` policy
+has schema 2, because no example program has two schemas (the test makes
+the variant with awk). The cast from the tally `(1, 2)` to `(2, 1)`
+reverts, and the cast from `(2, 1)` to `(1, 2)` runs. A cast between two
+policies with the same schema runs, and a cast between `none` rows runs.
+When no `evm` is on the PATH, `test/run.sh` prints a message and exits 0
+(my choice, not ruled). `make test` runs it after `test/build.sh`.
 
 `anchorc table PROG` (chunk 4a) prints the table in this stable text form,
 one item on each line:
@@ -352,12 +437,13 @@ representation for indexers. The design model is not an event log.
   cfe211b (lexer, parser, printer, arena, diagnostics, keccak, EVM
   assembler). RULED 2026-10-07 (USER): a standalone repo now; a later port
   can return the host to lang-template as `hosts/tcc-evm`.
-- Gate tools: geth `evm` (1.14.12) runs the bytecode; Foundry `cast` gives
-  calldata and selectors as an oracle. The build does not need them.
+- Gate tools: geth `evm` (1.14.12) runs the bytecode (`test/run.sh`);
+  Foundry `cast` gives calldata and selectors as an oracle. The build does
+  not need them. `make test` needs `evm` on the PATH to run
+  `test/run.sh`; without it, `test/run.sh` exits 0 with a message.
 - `probe/CAPABILITY.md` records what the host can do now: the TinyCC
   build, the EVM assembler, the checker and its codes, and the PLANNED
-  work of chunks 5b and 6. The contract writer of chunk 5a is in
-  `src/evm.c`.
+  work of chunk 6. The contract writer of chunk 5 is in `src/evm.c`.
 
 ## 9. Open items
 
@@ -378,8 +464,8 @@ representation for indexers. The design model is not an event log.
   the program holds no address value. Not ruled.
 - O6. Schema version. The design says it "only increases". Proposal: `cast`
   reverts when it moves a `one p` outcome to a policy with a lower
-  `schema`. Not ruled. The guard reads the outcome table, so chunk 5b adds
-  it.
+  `schema`. Not ruled. The guard of section 7 applies when the outcomes
+  before and after the move are both `one`.
 - O7. Challenge window and dispute annotations. No operation in the design
   dictionary reads `window`. M1 carries it in the policy and no entry reads
   it. Dispute annotations (metadata, never removal) are not in M1. Not
@@ -478,3 +564,13 @@ cases: the `abi` text of each example program, 3 selectors, 6 build checks
 for each example program, the code of each mutant under `abi` and `build`,
 the EIP-3860 bound at 1527 and 1528 members, and a bytecode write failure
 that exits 2 and removes the incomplete output).
+
+Status 2026-10-08: chunk 5b staged. `anchorc abi` and `anchorc build`
+tabulate. The runtime ends with the outcome table and computes the row of
+the current tally (section 7). `anchor` has its guards, the pair slot and
+the `Anchored` log. `cast` has the O6 guard. `anchorc abi` prints the
+`Anchored` line. `test/run.sh` runs the contract on geth `evm`. Gate
+GREEN: `make`, `make check-clang`, `make test` (parse.sh 38 cases; evm.sh
+9 cases, with the bytes of the 5b contract and the EIP-170 edge; check.sh
+40 cases; table.sh 13 cases; eval.sh 24 cases; build.sh 33 cases, with
+the EIP-3860 edge by bisection; run.sh 19 cases), 176 cases in all.

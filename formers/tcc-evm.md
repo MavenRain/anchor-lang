@@ -4,9 +4,9 @@ This file is the `tcc-evm` host column of `formers/FORMERS.md` for
 anchor-lang (SPEC section 3). The status words are those of
 `formers/FORMERS.md` section 4. A status is for the checker of chunk 3: the
 checker accepts the former and checks its rules. Chunk 4a evaluates `rule`
-at each tally (`anchorc table`). The contract writer of chunk 5a
-writes the constructor and the entries, but no former runs on the EVM yet:
-the outcome table comes in chunk 5b.
+at each tally (`anchorc table`). The contract writer of chunk 5
+writes the constructor, the entries and the outcome table. No former runs
+on the EVM: the runtime reads the outcomes from the table.
 
 The evidence is a prelude definition (`prelude/Prelude.anc`, cited as
 `:LINE`), a case of `test/check.sh` or a mutant of `examples/mutants/`.

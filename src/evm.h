@@ -7,7 +7,7 @@
 #include <stdio.h>
 
 enum {
-  EVM_CAPACITY = 8192,     /* bytes of one code buffer */
+  EVM_CAPACITY = 49152,    /* bytes of one code buffer: EVM_INITCODE_MAX */
   EVM_FIXUPS = 512,        /* PUSH2 label sites of one code buffer */
   EVM_LABELS = 64,         /* labels of one code buffer */
   EVM_RUNTIME_MAX = 24576, /* EIP-170 */
@@ -19,10 +19,11 @@ typedef enum {
   OP_GT = 0x11, OP_EQ = 0x14, OP_ISZERO = 0x15, OP_SHR = 0x1c, OP_SHA3 = 0x20,
   OP_CALLER = 0x33, OP_CALLVALUE = 0x34, OP_CALLDATALOAD = 0x35,
   OP_CALLDATASIZE = 0x36, OP_CODESIZE = 0x38, OP_CODECOPY = 0x39,
-  OP_POP = 0x50, OP_MLOAD = 0x51, OP_MSTORE = 0x52, OP_SLOAD = 0x54,
+  OP_TIMESTAMP = 0x42,   OP_POP = 0x50, OP_MLOAD = 0x51, OP_MSTORE = 0x52, OP_SLOAD = 0x54,
   OP_SSTORE = 0x55, OP_JUMP = 0x56, OP_JUMPI = 0x57, OP_JUMPDEST = 0x5b,
   OP_PUSH0 = 0x5f, OP_PUSH1 = 0x60, OP_PUSH2 = 0x61, OP_PUSH4 = 0x63,
-  OP_DUP1 = 0x80, OP_DUP2 = 0x81, OP_SWAP1 = 0x90, OP_SWAP2 = 0x91,
+  OP_DUP1 = 0x80, OP_DUP2 = 0x81, OP_DUP3 = 0x82, OP_DUP4 = 0x83, OP_DUP5 = 0x84,
+  OP_SWAP1 = 0x90, OP_SWAP2 = 0x91, OP_SWAP3 = 0x92, OP_SWAP4 = 0x93, OP_LOG2 = 0xa2,
   OP_RETURN = 0xf3, OP_REVERT = 0xfd
 } EvmOp;
 
@@ -85,11 +86,28 @@ int evm_write_hex(const EvmAsm *a, FILE *out, FILE *err);
 
 typedef enum { ANCHOR_PART_CREATION, ANCHOR_PART_RUNTIME } AnchorPart;
 
-/* The anchor contract of SPEC section 7. Chunk 5b adds the outcome table
- * and the policy fields that a guard reads. */
+/* A row of the outcome table: the fate of one tally and its policies. */
+typedef struct {
+  unsigned fate;  /* 0 none, 1 one, 2 two */
+  size_t p;       /* fate 1 or 2: a policy number, else 0 */
+  size_t q;       /* fate 2: a policy number, else 0 */
+} AnchorContractRow;
+
+/* The fields of a policy that a guard reads: hashDom and clock have one
+ * value (O4, O1), forkFreeze is forced (O2) and no entry reads the window (O7). */
+typedef struct {
+  int allow;                  /* 1 allow, 0 deny */
+  unsigned long long schema;
+} AnchorContractPolicy;
+
+/* The anchor contract of SPEC section 7 with its outcome table. */
 typedef struct {
   unsigned members;   /* n >= 1, one address per member position (O5) */
   size_t candidates;  /* K >= 1, so a ballot is 0 to K - 1 */
+  size_t nrows;       /* C(n + K - 1, K - 1), one row for each tally, in the order of anchorc table */
+  const AnchorContractRow *rows;
+  size_t npolicies;   /* the candidates, then each other policy of an outcome */
+  const AnchorContractPolicy *policies;
 } AnchorContract;
 
 /* Writes lowercase hex, no 0x, one trailing newline. Returns 0, or nonzero

@@ -68,7 +68,7 @@ refuse deep-parens PARSE_DEPTH x "def x : Nat := $(awk 'BEGIN { for (i = 0; i < 
 refuse deep-arrows PARSE_DEPTH x "def x : $(awk 'BEGIN { for (i = 0; i < 5000; i++) printf "Nat -> " }')Nat := 0"
 refuse long-spine PARSE_DEPTH x "def x : Nat := f$(awk 'BEGIN { for (i = 0; i < 5000; i++) printf " 0" }')"
 
-# anchorc: usage and IO exit 2, a verb exits 1 with PLANNED until its back end lands.
+# anchorc: usage and IO exit 2, each verb exits 0 on a program that checks.
 "$anchorc" > /dev/null 2> "$out/usage.err"
 check "anchorc with no verb is usage" $? 2 "$out/usage.err" "anchorc: USAGE: -: "
 "$anchorc" frob x > /dev/null 2> "$out/usage.err"
@@ -89,9 +89,9 @@ check "anchorc check exits 0" $? 0 "$out/verb.err" ""
 "$anchorc" eval "$program" members > /dev/null 2> "$out/verb.err"
 check "anchorc eval exits 0" $? 0 "$out/verb.err" ""
 "$anchorc" abi "$program" > /dev/null 2> "$out/verb.err"
-check "anchorc abi is PLANNED" $? 1 "$out/verb.err" "anchorc: PLANNED: -: "
+check "anchorc abi exits 0" $? 0 "$out/verb.err" ""
 "$anchorc" build "$program" --runtime -o "$out/x.hex" > /dev/null 2> "$out/verb.err"
-check "anchorc build is PLANNED" $? 1 "$out/verb.err" "anchorc: PLANNED: -: "
+check "anchorc build exits 0" $? 0 "$out/verb.err" ""
 
 if [ "$failures" -eq 0 ]; then echo "parse.sh: all passed"; exit 0; fi
 echo "parse.sh: $failures failed"

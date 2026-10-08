@@ -1,6 +1,7 @@
 /* Test driver of the EVM back end, built by make as build/evmtool:
- *   evmtool creation|runtime N   the contract of N members (anchor_evm_write)
- *   evmtool keccak TEXT          keccak256 of the bytes of TEXT
+ *   evmtool creation|runtime N K  the contract of N members and K candidates
+ *                                 (anchor_evm_write)
+ *   evmtool keccak TEXT           keccak256 of the bytes of TEXT
  * Exit 0 ok, 1 refused by the back end, 2 usage. */
 #include "../src/evm.h"
 #include "../src/keccak.h"
@@ -10,7 +11,7 @@
 enum { TOOL_DIGITS = 9 };
 
 static int usage(void) {
-  fputs("usage: evmtool creation|runtime N | evmtool keccak TEXT\n", stderr);
+  fputs("usage: evmtool creation|runtime N K | evmtool keccak TEXT\n", stderr);
   return 2;
 }
 
@@ -39,11 +40,12 @@ int main(int argc, char **argv) {
   if (argc == 3 && strcmp(argv[1], "keccak") == 0)
     return keccak(argv[2]);
   AnchorPart part;
-  if (argc != 3 || !part_of(argv[1], &part))
+  if (argc != 4 || !part_of(argv[1], &part))
     return usage();
   long members = number(argv[2]);
-  if (members < 0)
+  long candidates = number(argv[3]);
+  if (members < 0 || candidates < 0)
     return usage();
-  AnchorContract contract = { (unsigned)members };
+  AnchorContract contract = { (unsigned)members, (size_t)candidates };
   return anchor_evm_write(&contract, part, stdout, stderr) == 0 ? 0 : 1;
 }

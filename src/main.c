@@ -2,14 +2,14 @@
  *   anchorc check PROG                    the fate report (chunk 4b)
  *   anchorc table PROG                    the outcome of each tally (chunk 4a)
  *   anchorc eval PROG NAME                the normal form of NAME (chunk 4b)
- *   anchorc build PROG [--runtime] -o OUT the contract (chunk 5)
- *   anchorc abi PROG                      the entries of the contract (chunk 5)
+ *   anchorc build PROG [--runtime] -o OUT the contract as hex (chunk 5a)
+ *   anchorc abi PROG                      the entries of the contract (chunk 5a)
  * Exit 0 ok, 1 refused, 2 usage or IO; errors go to stderr as
  * "anchorc: CODE: DEF: message". Each verb parses the embedded prelude and
- * PROG and checks them (src/check.h). check, table and eval print their
- * result and exit 0; build and abi still exit 1 with PLANNED until their
- * back end lands (chunk 5). */
+ * PROG and checks them (src/check.h), then prints its result and exits 0.
+ * build and abi do not tabulate until chunk 5b. */
 #include "check.h"
+#include "evm.h"
 #include "prelude.h"
 #include "syntax.h"
 #include <string.h>
@@ -37,15 +37,60 @@ static int eval_verb(AnchorChecked *checked, char **argv) {
   return anchor_eval(checked, argv[3], stdout);
 }
 
+/* The contract of the checked program (src/evm.h). */
+static int contract_of(AnchorChecked *checked, AnchorContract *contract) {
+  contract->members = anchor_members(checked);
+  contract->candidates = 0;
+  return anchor_candidates(checked, &contract->candidates);
+}
+
+static int abi_verb(AnchorChecked *checked, char **argv) {
+  (void)argv;
+  AnchorContract contract;
+  int status = contract_of(checked, &contract);
+  if (status != ANCHOR_EXIT_OK)
+    return status;
+  return anchor_abi_write(&contract, stdout, stderr) == 0 ? ANCHOR_EXIT_OK : ANCHOR_EXIT_USAGE;
+}
+
+/* build PROG [--runtime] -o OUT. OUT gets the hex; a refusal of the back
+ * end removes OUT. */
+static int build_verb(AnchorChecked *checked, char **argv) {
+  int runtime = strcmp(argv[3], "--runtime") == 0;
+  const char *path = argv[runtime ? 5 : 4];
+  AnchorContract contract;
+  int status = contract_of(checked, &contract);
+  if (status != ANCHOR_EXIT_OK)
+    return status;
+  FILE *out = fopen(path, "w");
+  if (out == NULL) {
+    fprintf(stderr, "anchorc: IO: -: cannot write %s\n", path);
+    return ANCHOR_EXIT_USAGE;
+  }
+  AnchorPart part = runtime ? ANCHOR_PART_RUNTIME : ANCHOR_PART_CREATION;
+  int bad = anchor_evm_write(&contract, part, out, stderr);
+  int write_failed = ferror(out);
+  int closed = fclose(out) == 0;
+  if (bad) {
+    remove(path);
+    return write_failed ? ANCHOR_EXIT_USAGE : ANCHOR_EXIT_REFUSED;
+  }
+  if (!closed) {
+    fprintf(stderr, "anchorc: IO: -: cannot write %s\n", path);
+    return ANCHOR_EXIT_USAGE;
+  }
+  return ANCHOR_EXIT_OK;
+}
+
 typedef struct {
   const char *name;
   int argc;  /* argc with the verb, PROG and NAME; build adds -o OUT */
-  int (*back)(AnchorChecked *checked, char **argv);  /* NULL: PLANNED */
+  int (*back)(AnchorChecked *checked, char **argv);
 } Verb;
 
 static const Verb VERBS[] = {
   {"check", 3, check_verb}, {"table", 3, table_verb}, {"eval", 4, eval_verb},
-  {"build", 5, NULL}, {"abi", 3, NULL}
+  {"build", 5, build_verb}, {"abi", 3, abi_verb}
 };
 
 static int usage(void) {
@@ -93,10 +138,7 @@ static int run(Arena *arena, const Verb *verb, char **argv, Diag *diag) {
   status = anchor_check(arena, &prelude, &program, &checked, diag);
   if (status != ANCHOR_EXIT_OK)
     return status;
-  if (verb->back != NULL)
-    return verb->back(checked, argv);
-  diag_set(diag, "PLANNED", span_of("-"), "anchorc %s has no back end yet (SPEC section 10)", verb->name);
-  return ANCHOR_EXIT_REFUSED;
+  return verb->back(checked, argv);
 }
 
 int main(int argc, char **argv) {

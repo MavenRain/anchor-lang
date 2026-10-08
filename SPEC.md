@@ -99,7 +99,8 @@ The type formers are F1 to F15 of `formers/FORMERS.md`. This language uses a
 new host column, `tcc-evm`. `formers/tcc-evm.md` gives a status and the
 evidence for each former. A status is for the checker of chunk 3. The
 evaluator of chunk 4 uses the normalizer of the checker. The contract
-writer (chunk 5) is PLANNED.
+writer of chunk 5a uses no former. The outcome table in the contract
+(chunk 5b) is PLANNED.
 
 | ID | Status on tcc-evm | Effect on this language | Open item |
 |---|---|---|---|
@@ -232,10 +233,63 @@ of `anchor`.
 |---|---|---|
 | `anchor(bytes32)` returns `uint256` | caller is a member; `h != 0`; `admit` at the current tally | sets the slot of `keccak256(h, t)` with `t = TIMESTAMP`; logs `Anchored(bytes32,uint256)`; returns `t` |
 | `verify(bytes32,uint256)` returns `uint256` | none | returns 1 if the slot of `keccak256(h, t)` is set, else 0 |
-| `cast(uint256)` | caller is a member; ballot less than the number of candidates; O6 | changes the ballot and the tally counts |
+| `cast(uint256)` | caller is a member; ballot less than the number of candidates; O6 (chunk 5b) | changes the ballot and the tally counts |
 
 Storage holds the member addresses, the ballots, the tally counts and the
-pair slots. Nothing else. Chunk 5 (section 10) fixes the slot numbers.
+pair slots. Nothing else. The slot numbers (chunk 5a) are my choice, not
+ruled:
+
+- The tally count of candidate `c` is slot `c`, for `c` from 0 to K - 1.
+- The ballot of member position `i` is slot `K + i`. The zero word is
+  candidate 0, so the constructor writes no ballot (O10).
+- The member slot of an address `a` is `keccak256(a)`, with `a` as one
+  32-byte word. It holds `i + 1` for the member at position `i`, else 0.
+- The pair slot of `(h, t)` is `keccak256(h . t)`, two 32-byte words. It
+  holds 1 when the log holds the pair.
+
+A member slot hashes 32 bytes and a pair slot hashes 64 bytes, so `verify`
+cannot read a member slot as a pair.
+
+The constructor (O5, O10) reads `members` address words after the creation
+code. It reverts when the code does not end with exactly `members` words,
+when a word is not an address, when an address is zero, and when an
+address occurs two times (my choice, not ruled). It writes the member slot
+of each address and sets the count of candidate 0 to `members`. Thus the
+tally starts at `(members, 0, ..., 0)` (O10).
+
+The dispatch order is `anchor`, `verify`, `cast`. An unknown selector
+reverts. `cast(c)` moves the ballot of the caller from `old` to `c`: the
+count of `old` goes down by 1 and the count of `c` goes up by 1. The O6
+guard reads the outcome table, so chunk 5b adds it. `anchor(bytes32)` is in
+the dispatch, but it reverts until chunk 5b adds its guards, the pair slot
+and the log.
+
+`anchorc abi PROG` prints one line for the constructor, then one line for
+each entry in the order of the dispatch (my choice, not ruled). A selector
+is 8 lowercase hex digits: the first 4 bytes of `keccak256` of the
+signature. `-` is no output. Chunk 5b adds a line for the `Anchored` log.
+For 3 members:
+
+    constructor inputs address[3]
+    entry anchor(bytes32) selector eecdf927 inputs bytes32 outputs uint256
+    entry verify(bytes32,uint256) selector 382262fc inputs bytes32,uint256 outputs uint256
+    entry cast(uint256) selector 738198b4 inputs uint256 outputs -
+
+`anchorc build PROG [--runtime] -o OUT` writes the creation code to OUT as
+lowercase hex, or the runtime code with `--runtime`. The creation code ends
+with the runtime code. When the back end refuses, OUT is removed. `abi` and
+`build` run after `anchor_check` and read `members` and the candidates.
+They do not tabulate until chunk 5b. Thus a refusal that only the table
+finds (a stuck outcome or a fork, section 2) does not stop `build` in
+chunk 5a.
+
+Bounds of the back end (my choice, not ruled, from the EIPs): the runtime
+code is at most 24576 bytes (EIP-170) and the creation code with the
+member words is at most 49152 bytes (EIP-3860), else `EVM_SIZE`. With the
+candidates of `examples/programs/arrow-debreu.anc`, 1527 members pass and
+1528 members are `EVM_SIZE`. 0 members or 0 candidates is `EVM_LIMIT`.
+`abi` applies no code bound. A back-end error is
+`anchorc: CODE: -: message`.
 
 The compiler tabulates `Gov` over every tally at compile time. The runtime
 reads the outcome code of the current tally from a table at the end of the
@@ -302,7 +356,8 @@ representation for indexers. The design model is not an event log.
   calldata and selectors as an oracle. The build does not need them.
 - `probe/CAPABILITY.md` records what the host can do now: the TinyCC
   build, the EVM assembler, the checker and its codes, and the PLANNED
-  work of chunks 4 to 6.
+  work of chunks 5b and 6. The contract writer of chunk 5a is in
+  `src/evm.c`.
 
 ## 9. Open items
 
@@ -323,7 +378,8 @@ representation for indexers. The design model is not an event log.
   the program holds no address value. Not ruled.
 - O6. Schema version. The design says it "only increases". Proposal: `cast`
   reverts when it moves a `one p` outcome to a policy with a lower
-  `schema`. Not ruled.
+  `schema`. Not ruled. The guard reads the outcome table, so chunk 5b adds
+  it.
 - O7. Challenge window and dispute annotations. No operation in the design
   dictionary reads `window`. M1 carries it in the policy and no entry reads
   it. Dispute annotations (metadata, never removal) are not in M1. Not
@@ -407,3 +463,18 @@ check.sh 40 cases: the fate report of each example program and
 `TABLE_LIMIT` under `check`; table.sh 13 cases; eval.sh 24 cases: 9 normal
 forms, 2 recursive-def round trips, 4 `EVAL_NAME` names, `eval` of a `TABLE_LIMIT` program, the code of
 each mutant under `eval`).
+
+Status 2026-10-08: chunk 5a staged. Chunk 5 has two parts. 5a: the slots,
+the constructor, the dispatch, `verify`, `cast`, `anchorc abi` and
+`anchorc build` (section 7). 5b: the `anchor` entry with the `admit` guard
+on the outcome table by `CODECOPY`, the policy fields that a guard reads,
+the O6 guard of `cast`, the `Anchored` log and the table bytes. Gate
+GREEN: `make`, `make check-clang`, `make test` (parse.sh 38 cases: 13 round
+trips, embedded prelude, 13 refusals, 11 command line exits with `abi` and
+`build` at exit 0; evm.sh 7 cases: 2 keccak vectors, the dispatch, the
+runtime and the creation code of 1 member and 1 candidate, 2 `EVM_LIMIT`
+cases; check.sh 40 cases; table.sh 13 cases; eval.sh 24 cases; build.sh 35
+cases: the `abi` text of each example program, 3 selectors, 6 build checks
+for each example program, the code of each mutant under `abi` and `build`,
+the EIP-3860 bound at 1527 and 1528 members, and a bytecode write failure
+that exits 2 and removes the incomplete output).

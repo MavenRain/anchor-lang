@@ -10,13 +10,15 @@ enum {
   EVM_CAPACITY = 8192,     /* bytes of one code buffer */
   EVM_FIXUPS = 512,        /* PUSH2 label sites of one code buffer */
   EVM_LABELS = 64,         /* labels of one code buffer */
-  EVM_RUNTIME_MAX = 24576  /* EIP-170 */
+  EVM_RUNTIME_MAX = 24576, /* EIP-170 */
+  EVM_INITCODE_MAX = 49152 /* EIP-3860: the creation code and the constructor arguments */
 };
 
 typedef enum {
-  OP_ADD = 0x01, OP_MUL = 0x02, OP_SUB = 0x03, OP_LT = 0x10, OP_GT = 0x11,
-  OP_EQ = 0x14, OP_SHR = 0x1c, OP_SHA3 = 0x20, OP_CALLVALUE = 0x34,
-  OP_CALLDATALOAD = 0x35, OP_CALLDATASIZE = 0x36, OP_CODECOPY = 0x39,
+  OP_STOP = 0x00, OP_ADD = 0x01, OP_MUL = 0x02, OP_SUB = 0x03, OP_LT = 0x10,
+  OP_GT = 0x11, OP_EQ = 0x14, OP_ISZERO = 0x15, OP_SHR = 0x1c, OP_SHA3 = 0x20,
+  OP_CALLER = 0x33, OP_CALLVALUE = 0x34, OP_CALLDATALOAD = 0x35,
+  OP_CALLDATASIZE = 0x36, OP_CODESIZE = 0x38, OP_CODECOPY = 0x39,
   OP_POP = 0x50, OP_MLOAD = 0x51, OP_MSTORE = 0x52, OP_SLOAD = 0x54,
   OP_SSTORE = 0x55, OP_JUMP = 0x56, OP_JUMPI = 0x57, OP_JUMPDEST = 0x5b,
   OP_PUSH0 = 0x5f, OP_PUSH1 = 0x60, OP_PUSH2 = 0x61, OP_PUSH4 = 0x63,
@@ -24,10 +26,10 @@ typedef enum {
   OP_RETURN = 0xf3, OP_REVERT = 0xfd
 } EvmOp;
 
-/* A jump label. The assembler owns the first two; a target numbers its own
+/* A jump label. The assembler owns the first three; a target numbers its own
  * labels from EVM_LABEL_TARGET to EVM_LABELS - 1. */
 typedef size_t EvmLabel;
-enum { EVM_LABEL_REVERT = 0, EVM_LABEL_RUNTIME = 1, EVM_LABEL_TARGET = 2 };
+enum { EVM_LABEL_REVERT = 0, EVM_LABEL_RUNTIME = 1, EVM_LABEL_END = 2, EVM_LABEL_TARGET = 3 };
 
 /* One code buffer. Only the evm_ functions read or write the fields. Pass 1
  * appends code and records each PUSH2 label site; evm_finish (pass 2)
@@ -69,7 +71,10 @@ void evm_entry(EvmAsm *a, EvmLabel label, unsigned words);
 void evm_return_top(EvmAsm *a);
 /* Binds EVM_LABEL_REVERT: REVERT with empty output. */
 void evm_revert_block(EvmAsm *a);
-/* Creation code: reverts on a call value, copies BODY to memory and returns it. */
+/* The end of the creation code, after the constructor that the target wrote
+ * into A: copies BODY to memory and returns it. Binds EVM_LABEL_END after
+ * BODY, so a PUSH2 of EVM_LABEL_END is the size of the creation code, where
+ * the constructor arguments start. */
 void evm_creation(EvmAsm *a, const EvmAsm *body);
 /* Pass 2. Returns 0, or nonzero after writing "anchorc: EVM_<CODE>: message\n" to err. */
 int evm_finish(EvmAsm *a, FILE *err);
@@ -80,13 +85,19 @@ int evm_write_hex(const EvmAsm *a, FILE *out, FILE *err);
 
 typedef enum { ANCHOR_PART_CREATION, ANCHOR_PART_RUNTIME } AnchorPart;
 
-/* The anchor contract of SPEC section 7. Chunk 5 adds the candidate
- * policies, the outcome table, the storage slots and the entries. */
+/* The anchor contract of SPEC section 7. Chunk 5b adds the outcome table
+ * and the policy fields that a guard reads. */
 typedef struct {
-  unsigned members;  /* n >= 1, one address per member position (O5) */
+  unsigned members;   /* n >= 1, one address per member position (O5) */
+  size_t candidates;  /* K >= 1, so a ballot is 0 to K - 1 */
 } AnchorContract;
 
 /* Writes lowercase hex, no 0x, one trailing newline. Returns 0, or nonzero
  * after writing "anchorc: EVM_<CODE>: message\n" to err. */
 int anchor_evm_write(const AnchorContract *contract, AnchorPart part, FILE *out, FILE *err);
+
+/* Writes the entries of the contract in the text form of SPEC section 7:
+ * the constructor, then one line for each entry in the order of the
+ * dispatch. Returns 0, or nonzero after an EVM_ message to err. */
+int anchor_abi_write(const AnchorContract *contract, FILE *out, FILE *err);
 #endif

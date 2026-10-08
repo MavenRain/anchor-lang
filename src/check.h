@@ -53,6 +53,11 @@ typedef struct {
  * CHECKED. */
 int anchor_table(AnchorChecked *checked, AnchorTable *table);
 
+/* The number of candidates in *K, without the table (anchorc build and abi
+ * until chunk 5b). Returns ANCHOR_EXIT_OK, or ANCHOR_EXIT_REFUSED with
+ * TABLE_LIMIT, TABLE_STUCK or MEMORY. */
+int anchor_candidates(AnchorChecked *checked, size_t *k);
+
 /* The stable text form of SPEC section 7. */
 void anchor_print_table(FILE *out, const AnchorTable *table);
 

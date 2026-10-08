@@ -1,7 +1,7 @@
 # anchorc with TinyCC (SPEC section 8). make builds build/anchorc,
 # build/parsetool and build/evmtool, make check-clang checks every C file
-# with clang, and make test runs test/parse.sh, test/evm.sh, test/check.sh, test/table.sh
-# and test/eval.sh.
+# with clang, and make test runs test/parse.sh, test/evm.sh, test/check.sh,
+# test/table.sh, test/eval.sh and test/build.sh.
 TCC = tcc
 CLANG = cc
 TCCFLAGS = -std=c99 -Wall -Werror
@@ -38,6 +38,7 @@ test: build/anchorc build/parsetool build/evmtool
 	sh test/check.sh
 	sh test/table.sh
 	sh test/eval.sh
+	sh test/build.sh
 
 clean:
 	rm -rf build

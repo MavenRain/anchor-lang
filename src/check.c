@@ -1710,6 +1710,15 @@ int anchor_table(AnchorChecked *c, AnchorTable *t) {
   return ANCHOR_EXIT_OK;
 }
 
+int anchor_candidates(AnchorChecked *c, size_t *k) {
+  *k = 0;
+  if (c->failed)
+    return ANCHOR_EXIT_REFUSED;
+  c->def = span_of("candidates");
+  c->loc = find_global(c, "candidates")->decl->loc;
+  return candidate_policies(c, k) == NULL ? ANCHOR_EXIT_REFUSED : ANCHOR_EXIT_OK;
+}
+
 static const char *const FATES[3] = {"none", "one", "two"};
 
 /* "tally c0 ... cK-1" of row R, with no newline. */

@@ -22,7 +22,8 @@ or a test. PLANNED work has no evidence yet.
   verb parses and checks the embedded prelude and PROG. `check` prints the
   fate report and `table` prints the table (SPEC section 7). Each tabulates
   one time. `eval` prints the normal form of a def, else `EVAL_NAME`.
-  `build` and `abi` exit 1 with `PLANNED` (chunk 5).
+  `abi` prints the entries and `build` writes the hex of the contract
+  (chunk 5a, SPEC section 7). They do not tabulate until chunk 5b.
 
 ## Limits
 
@@ -48,6 +49,11 @@ or a test. PLANNED work has no evidence yet.
 - A table holds at most `TABLE_LIMIT` = 4096 tallies, C(members + K - 1,
   K - 1) for K candidates (`src/check.c`; `test/table.sh`: 4095 members
   and 2 candidates pass, 4096 members are `TABLE_LIMIT`).
+- The runtime code is at most `EVM_RUNTIME_MAX` = 24576 bytes (EIP-170).
+  The creation code with the member words is at most `EVM_INITCODE_MAX` =
+  49152 bytes (EIP-3860). Else `EVM_SIZE`. With the candidates of
+  `arrow-debreu.anc`, 1527 members pass and 1528 are `EVM_SIZE`
+  (`test/build.sh`). 0 members or 0 candidates is `EVM_LIMIT`.
 
 ## Carried from the origin compiler
 
@@ -61,8 +67,9 @@ The origin compiler is the compiler of SPEC section 8.
 - EVM assembler (`src/evm.{h,c}`): opcodes, PUSH widths, labels 0 to 63
   with two passes for the PUSH2 offsets, the dispatch by the selector of a
   signature, and the creation code. The runtime has the dispatch head and
-  the revert block only, so every call reverts until chunk 5. The target
-  interface is `anchor_evm_write`. Codes: `EVM_LIMIT`, `EVM_SIZE`,
+  the revert block only. Chunk 5a adds the constructor, the entries and
+  `anchor_abi_write` (SPEC section 7). The target interface is
+  `anchor_evm_write`. Codes: `EVM_LIMIT`, `EVM_SIZE`,
   `EVM_USAGE`, `EVM_IO`, `EVM_INTERNAL`.
 
 ## Checker
@@ -97,17 +104,19 @@ tabulates the rule and makes the full fork check.
 
 ## Planned
 
-- Chunk 5 (M2): the contract writer: entries, storage, the outcome table
-  and the `Anchored` log. The verbs `build` and `abi`.
+- Chunk 5b (M2): the `anchor` entry with the `admit` guard on the outcome
+  table by `CODECOPY`, the policy fields that a guard reads, the O6 guard
+  of `cast`, the `Anchored` log and the table bytes. `build` tabulates.
 - Chunk 6 (M3): differential tests against geth `evm` on call traces, the
   law tests, a deploy test and the docs.
 
 ## Gates (2026-10-08)
 
-All GREEN on the chunk 4b tree:
+All GREEN on the chunk 5a tree:
 
 - `make` (tcc `-Wall -Werror`).
 - `make check-clang`.
-- `make test`: `test/parse.sh` 38 cases (13 round trips), `test/evm.sh` 5
+- `make test`: `test/parse.sh` 38 cases (13 round trips), `test/evm.sh` 7
   cases, `test/check.sh` 40 cases, `test/table.sh` 13 cases,
-  `test/eval.sh` 24 cases, including both recursive prelude defs.
+  `test/eval.sh` 24 cases, including both recursive prelude defs,
+  `test/build.sh` 35 cases.

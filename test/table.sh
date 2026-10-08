@@ -75,7 +75,9 @@ for f in "$mutants"/*.anc; do
   status=$?
   want=$(cut -d: -f2 "$out/check.err")
   got=$(cut -d: -f2 "$out/table.err")
-  if [ "$status" -eq 1 ] && [ -n "$want" ] && [ "$want" = "$got" ]; then
+  same=0
+  if [ -n "$want" ] && [ "$want" = "$got" ]; then same=1; fi
+  if [ "$status" -eq 1 ] && [ "$same" -eq 1 ]; then
     pass "mutant $(basename "$f") keeps$got"
   else
     fail "mutant $(basename "$f"): exit $status, check$want, table$got"

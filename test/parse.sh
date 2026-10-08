@@ -84,7 +84,7 @@ check "anchorc check of a missing file is IO" $? 2 "$out/io.err" "anchorc: IO_RE
 "$anchorc" check "$out/bad-token.anc" > /dev/null 2> "$out/refused.err"
 check "anchorc check of a bad file is refused" $? 1 "$out/refused.err" "anchorc: LEX_TOKEN: x: "
 program=$root/examples/programs/arrow-debreu.anc
-for verb in check table abi; do
+for verb in check abi; do
   "$anchorc" $verb "$program" > /dev/null 2> "$out/verb.err"
   check "anchorc $verb is PLANNED" $? 1 "$out/verb.err" "anchorc: PLANNED: -: "
 done

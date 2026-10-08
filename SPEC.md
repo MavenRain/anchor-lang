@@ -55,6 +55,16 @@ their policy freeze flags. Every possible fork side must reduce to
 `flagYes`. It conservatively refuses a flag or outcome whose alternatives
 remain unresolved, using `REFUSE_FORK`.
 
+Chunk 4a adds the full fork check by tabulation (section 7). At each
+tally, a `two p q` outcome with a side whose `policyForkFreeze` is
+`flagNo` is `REFUSE_FORK`, and the message names the tally. The two checks
+relate as follows. The chunk 3 check runs first, on each verb, and
+explores each arm of `rule` under an open tally. Thus it refuses each fork
+that the full check can find, and also forks at count vectors that are not
+tallies. The full check is a second check of the same property on closed
+outcomes. With the chunk 3 check as written, no program gets to the
+`REFUSE_FORK` of the full check, so no test does. My choice, not ruled.
+
 `REFUSE_AXIOM` cannot be reached from the parser. The surface of section 8
 has no axiom form: each declaration starts with `def` or `mu`. Thus the
 parser refuses `axiom x : Nat` with `PARSE_EXPECT` before the checker runs
@@ -231,6 +241,27 @@ reads the outcome code of the current tally from a table at the end of the
 runtime code by `CODECOPY`. For each candidate the
 table also holds the policy fields that a guard reads.
 
+`anchorc table PROG` (chunk 4a) prints the table in this stable text form,
+one item on each line:
+
+- `members M`, then `candidates K`.
+- `policy N FORM` for each policy: the candidates in order (0 to K-1),
+  then each other policy of an outcome, in the order of first use. FORM is
+  the closed normal form in the canonical form of the printer. Two
+  policies with the same normal form have the same number.
+- `tally c0 ... cK-1 : none`, `: one P` or `: two P Q` for each tally,
+  where P and Q are policy numbers. The tallies are the count vectors
+  whose sum is M, in reverse lexicographic order: `(M, 0, ..., 0)` first
+  (the tally of the O10 proposal) and `(0, ..., 0, M)` last.
+
+The count function of a tally gives `ci` at candidate i and 0 at the other
+numbers (prelude note P5). Each outcome must reduce to `none`, `one p` or
+`two p q` with closed policies, else `TABLE_STUCK`. A table holds at most
+`TABLE_LIMIT` = 4096 tallies, C(M + K - 1, K - 1); a larger one is
+`TABLE_LIMIT`. With 2 candidates, 4095 members give the largest table.
+My choice, not ruled. The arena of one run (`ANCHOR_ARENA_MAX`, 256 MiB)
+also bounds the memory of the table.
+
 Types, `Eq` proofs and universes erase. The `Anchored` log is
 representation for indexers. The design model is not an event log.
 
@@ -333,3 +364,12 @@ the opaque core names (`TYPE_SHAPE`, `TYPE_MATCH`) and one for the type of
 `make check-clang`, `make test` (parse.sh 39 cases: 13 round trips,
 embedded prelude, 13 refusals, 12 command line exits; evm.sh 5 cases;
 check.sh 39 cases, with the conditional fork and type erasure regressions).
+
+Status 2026-10-08: chunk 4a staged. `src/check.c` tabulates `rule` over
+each tally (section 7) and makes the full fork check (section 2).
+`anchorc table` prints the table and exits 0. `check` and `eval` (chunk
+4b), `build` and `abi` (chunk 5) still exit 1 with `PLANNED`. Gate GREEN:
+`make`, `make check-clang`, `make test` (parse.sh 38 cases: 13 round
+trips, embedded prelude, 13 refusals, 11 command line exits; evm.sh 5
+cases; check.sh 39 cases; table.sh 13 cases: the table of each example
+program, the code of each mutant under `table`, the `TABLE_LIMIT` bound).

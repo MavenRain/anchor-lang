@@ -15,7 +15,8 @@
 enum {
   CHECK_FUEL = 1 << 24,  /* evaluation steps of one declaration or of the fork check */
   CHECK_DEPTH = 4096,    /* nested eval, apply, conv, quote, check and infer calls; tcc on an 8 MB stack crashed between 12288 and 16384 (10-07) */
-  SINK_BYTES = 8192      /* the allocations after a MEMORY error land here */
+  SINK_BYTES = 8192,     /* the allocations after a MEMORY error land here */
+  TABLE_LIMIT = 4096     /* tallies of one table (SPEC section 7); my choice, not ruled */
 };
 
 typedef struct Value Value;
@@ -1483,3 +1484,250 @@ int anchor_check(Arena *arena, const Program *prelude, const Program *program, A
 }
 
 unsigned anchor_members(const AnchorChecked *checked) { return checked->members; }
+
+/* ---- tabulation (SPEC section 7) ---- */
+
+/* COUNT items of SIZE bytes in one piece, or NULL after MEMORY. alloc caps
+ * a piece at SINK_BYTES, so the table arrays come from the arena here. */
+static void *table_alloc(C *c, size_t count, size_t size) {
+  void *p = c->failed ? NULL : arena_alloc(c->arena, count * size);
+  if (p == NULL && !c->failed)
+    fail(c, "MEMORY", c->loc, "the table does not fit in the arena");
+  return p;
+}
+
+static int is_ctor(const Value *v, const Global *g, size_t nargs) {
+  return v->kind == V_CON && v->global == g && v->nargs == nargs;
+}
+
+/* V is closed and first order: numbers, injections, tuples and
+ * constructors all the way down. */
+static int closed(const Value *v) {
+  if (v->kind == V_NAT || v->kind == V_UNIT)
+    return 1;
+  if (v->kind == V_INJ)
+    return closed(v->left);
+  if (v->kind == V_PAIR || v->kind == V_TUPLE)
+    return closed(v->left) && closed(v->right);
+  int ok = v->kind == V_CON;
+  for (size_t i = 0; ok && i < v->nargs; i++)
+    ok = closed(v->args[i]);
+  return ok;
+}
+
+static Ast *nat_node(C *c, unsigned long long n) {
+  Ast *t = node(c, AST_NAT);
+  t->u.nat = n;
+  return t;
+}
+
+/* natAdd (case natEq i J with | 0 (u : prod ()) => 0 | 1 (u : prod ()) => N) REST */
+static Ast *count_term(C *c, size_t j, unsigned n, Ast *rest) {
+  Ast *t = node(c, AST_CASE);
+  t->u.cases.subject = app_node(c, app_node(c, var_node(c, "natEq"), var_node(c, "i")), nat_node(c, j));
+  for (size_t k = 0; k < 2; k++) {
+    t->u.cases.arms[k].binder.name = "u";
+    t->u.cases.arms[k].binder.type = node(c, AST_PROD0);
+    t->u.cases.arms[k].body = nat_node(c, k == 0 ? 0 : n);
+  }
+  return app_node(c, app_node(c, var_node(c, "natAdd"), t), rest);
+}
+
+/* The count function of a tally (prelude note P5): COUNTS at candidates 0
+ * to K-1 and 0 at the other numbers, with one term for each count that is
+ * not 0. */
+static Value *count_fn(C *c, const unsigned *counts, size_t k) {
+  Ast *body = nat_node(c, 0);
+  for (size_t j = k; j > 0; j--)
+    body = counts[j - 1] == 0 ? body : count_term(c, j - 1, counts[j - 1], body);
+  Ast *lam = node(c, AST_LAM);
+  lam->u.bind.binder.name = "i";
+  lam->u.bind.binder.type = var_node(c, "Nat");
+  lam->u.bind.body = body;
+  return eval(c, NULL, lam);
+}
+
+/* The number of tallies, C(members + K - 1, K - 1), or TABLE_LIMIT + 1
+ * once it is larger. */
+static size_t tally_total(unsigned members, size_t k) {
+  unsigned long long r = 1;
+  for (size_t i = 1; i < k && r <= TABLE_LIMIT; i++)
+    r = r * ((unsigned long long)members + i) / i;
+  return r > TABLE_LIMIT ? TABLE_LIMIT + 1 : (size_t)r;
+}
+
+/* COUNTS becomes the next tally in reverse lexicographic order. The
+ * caller stops at the last tally, (0, ..., 0, members). */
+static void next_tally(unsigned *counts, size_t k) {
+  size_t j = k - 1;  /* one past the candidate that gives up a ballot */
+  while (j > 0 && counts[j - 1] == 0)
+    j--;
+  if (j == 0)
+    return;
+  unsigned tail = counts[k - 1];
+  counts[j - 1]--;
+  counts[k - 1] = 0;
+  counts[j] = tail + 1;
+}
+
+/* "(c0, c1, ...)", cut after 16 counts. */
+static void tally_text(char *buf, size_t size, const unsigned *counts, size_t k) {
+  size_t shown = k < 16 ? k : 16;
+  size_t at = 0;
+  for (size_t j = 0; j < shown && at < size; j++)
+    at += (size_t)snprintf(buf + at, size - at, "%s%u", j == 0 ? "(" : ", ", counts[j]);
+  if (at < size)
+    snprintf(buf + at, size - at, "%s", k > 16 ? ", ...)" : ")");
+}
+
+/* The policies of candidates, candidate 0 first, and their number in *K;
+ * NULL after TABLE_LIMIT, TABLE_STUCK or MEMORY. */
+static Value **candidate_policies(C *c, size_t *k) {
+  Global *cons = find_global(c, "consPolicy");
+  Global *last = find_global(c, "lastPolicy");
+  Value *list = find_global(c, "candidates")->value;
+  size_t n = 0;
+  const Value *v = list;
+  for (; is_ctor(v, cons, 2) && n < TABLE_LIMIT; v = v->args[1])
+    n++;
+  if (n == TABLE_LIMIT) {
+    fail(c, "TABLE_LIMIT", c->loc, "candidates has more than %d policies", TABLE_LIMIT);
+    return NULL;
+  }
+  if (!is_ctor(v, last, 1)) {
+    fail(c, "TABLE_STUCK", c->loc, "candidates does not reduce to a list of policies");
+    return NULL;
+  }
+  Value **ps = table_alloc(c, n + 1, sizeof *ps);
+  if (ps == NULL)
+    return NULL;
+  v = list;
+  for (size_t i = 0; i < n; i++, v = v->args[1])
+    ps[i] = v->args[0];
+  ps[n] = v->args[0];
+  for (size_t i = 0; i <= n && !c->failed; i++)
+    if (!closed(ps[i]))
+      fail(c, "TABLE_STUCK", c->loc, "candidate %lu does not reduce to a closed policy", (unsigned long)i);
+  *k = n + 1;
+  return c->failed ? NULL : ps;
+}
+
+/* The number of the closed policy P: the first candidate or earlier extra
+ * policy with the same normal form, else a new extra policy at *N. */
+static size_t policy_number(C *c, Value **policies, size_t *n, Value *p) {
+  for (size_t i = 0; i < *n; i++)
+    if (conv(c, policies[i], p, 0))
+      return i;
+  policies[*n] = p;
+  return (*n)++;
+}
+
+/* The full fork check at one tally (SPEC section 2): each side of the
+ * closed outcome two p q O is frozen. */
+static void fork_sides(C *c, Value *o, const char *at) {
+  Value *freeze = find_global(c, "policyForkFreeze")->value;
+  for (size_t i = 0; i < 2 && !c->failed; i++) {
+    Value *flag = apply(c, freeze, o->args[i]);
+    if (flag->kind == V_INJ && flag->nat == 0)
+      fail(c, "REFUSE_FORK", c->loc, "policyForkFreeze %s of the two p q outcome at tally %s is flagNo",
+           i == 0 ? "p" : "q", at);
+  }
+}
+
+/* The row of the tally COUNTS: rule at mkTally of the count function,
+ * normalized to none, one p or two p q with closed policies. */
+static AnchorRow tally_row(C *c, const unsigned *counts, size_t k, Value **policies, size_t *n) {
+  static const char *const fates[3] = {"none", "one", "two"};
+  AnchorRow row = {ANCHOR_FATE_NONE, 0, 0};
+  char at[256];
+  tally_text(at, sizeof at, counts, k);
+  c->fuel = CHECK_FUEL;
+  Value *tally = apply(c, find_global(c, "mkTally")->value, count_fn(c, counts, k));
+  Value *o = apply(c, find_global(c, "rule")->value, tally);
+  if (c->failed)
+    return row;
+  size_t fate = 0;  /* also the number of policies of the outcome */
+  while (fate < 3 && !is_ctor(o, find_global(c, fates[fate]), fate))
+    fate++;
+  if (fate == 3 || !closed(o)) {
+    fail(c, "TABLE_STUCK", c->loc, "the outcome of rule at tally %s is not none, one p or two p q of closed policies",
+         at);
+    return row;
+  }
+  if (fate == 2)
+    fork_sides(c, o, at);
+  row.fate = (AnchorFate)fate;
+  row.p = fate >= 1 ? policy_number(c, policies, n, o->args[0]) : 0;
+  row.q = fate == 2 ? policy_number(c, policies, n, o->args[1]) : 0;
+  return row;
+}
+
+int anchor_table(AnchorChecked *c, AnchorTable *t) {
+  memset(t, 0, sizeof *t);
+  if (c->failed)
+    return ANCHOR_EXIT_REFUSED;
+  c->def = span_of("candidates");
+  c->loc = find_global(c, "candidates")->decl->loc;
+  size_t k = 0;
+  Value **cands = candidate_policies(c, &k);
+  size_t total = cands == NULL ? 0 : tally_total(c->members, k);
+  if (total > TABLE_LIMIT)
+    fail(c, "TABLE_LIMIT", c->loc, "%u members and %lu candidates give more than %d tallies", c->members,
+         (unsigned long)k, TABLE_LIMIT);
+  if (c->failed)
+    return ANCHOR_EXIT_REFUSED;
+  c->def = span_of("rule");
+  c->loc = find_global(c, "rule")->decl->loc;
+  unsigned *counts = table_alloc(c, total * k, sizeof *counts);
+  AnchorRow *rows = table_alloc(c, total, sizeof *rows);
+  Value **policies = table_alloc(c, k + 2 * total, sizeof *policies);
+  if (c->failed)
+    return ANCHOR_EXIT_REFUSED;
+  memcpy(policies, cands, k * sizeof *policies);
+  size_t n = k;
+  memset(counts, 0, k * sizeof *counts);
+  counts[0] = c->members;
+  for (size_t r = 0; r < total && !c->failed; r++) {
+    unsigned *row = counts + r * k;
+    if (r > 0) {
+      memcpy(row, row - k, k * sizeof *row);
+      next_tally(row, k);
+    }
+    rows[r] = tally_row(c, row, k, policies, &n);
+  }
+  const Ast **forms = table_alloc(c, n, sizeof *forms);
+  for (size_t i = 0; i < n && !c->failed; i++)
+    forms[i] = quote(c, policies[i], 0);
+  if (c->failed)
+    return ANCHOR_EXIT_REFUSED;
+  t->members = c->members;
+  t->candidates = k;
+  t->npolicies = n;
+  t->policies = forms;
+  t->nrows = total;
+  t->counts = counts;
+  t->rows = rows;
+  return ANCHOR_EXIT_OK;
+}
+
+void anchor_print_table(FILE *out, const AnchorTable *t) {
+  static const char *const fates[3] = {"none", "one", "two"};
+  fprintf(out, "members %u\ncandidates %lu\n", t->members, (unsigned long)t->candidates);
+  for (size_t i = 0; i < t->npolicies; i++) {
+    fprintf(out, "policy %lu ", (unsigned long)i);
+    anchor_print_term(out, t->policies[i]);
+    fputc('\n', out);
+  }
+  for (size_t r = 0; r < t->nrows; r++) {
+    const AnchorRow *row = &t->rows[r];
+    fputs("tally", out);
+    for (size_t j = 0; j < t->candidates; j++)
+      fprintf(out, " %u", t->counts[r * t->candidates + j]);
+    fprintf(out, " : %s", fates[row->fate]);
+    if (row->fate != ANCHOR_FATE_NONE)
+      fprintf(out, " %lu", (unsigned long)row->p);
+    if (row->fate == ANCHOR_FATE_TWO)
+      fprintf(out, " %lu", (unsigned long)row->q);
+    fputc('\n', out);
+  }
+}

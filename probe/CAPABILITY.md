@@ -19,7 +19,8 @@ or a test. PLANNED work has no evidence yet.
   is equal to `prelude/Prelude.anc`.
 - Verbs (`src/main.c`): `anchorc check|table|abi PROG`,
   `anchorc eval PROG NAME`, `anchorc build PROG [--runtime] -o OUT`. Each
-  verb parses and checks the prelude and PROG, then exits 1 with
+  verb parses and checks the prelude and PROG. `table` then prints the
+  outcome table (SPEC section 7) and exits 0; the other verbs exit 1 with
   `PLANNED`.
 
 ## Limits
@@ -43,6 +44,9 @@ or a test. PLANNED work has no evidence yet.
   has a smaller argument (`TYPE_REC`). `Nat` has no eliminator (prelude
   note P10). Thus the host has no unfold (F7).
 - The surface has no axiom form (SPEC section 2).
+- A table holds at most `TABLE_LIMIT` = 4096 tallies, C(members + K - 1,
+  K - 1) for K candidates (`src/check.c`; `test/table.sh`: 4095 members
+  and 2 candidates pass, 4096 members are `TABLE_LIMIT`).
 
 ## Carried from the origin compiler
 
@@ -92,19 +96,19 @@ tabulates the rule and makes the full fork check.
 
 ## Planned
 
-- Chunk 4 (M2): the evaluator, the tabulation over the tallies and the
-  fate report. The verbs `check`, `table` and `eval` give results, not
-  `PLANNED`.
+- Chunk 4b (M2): `anchorc eval PROG NAME` (the normal form of NAME), the
+  fate report on `anchorc check` (the tallies of each fate) and the docs.
+  Chunk 4a has the tabulation, the full fork check and `anchorc table`.
 - Chunk 5 (M2): the contract writer: entries, storage, the outcome table
   and the `Anchored` log. The verbs `build` and `abi`.
 - Chunk 6 (M3): differential tests against geth `evm` on call traces, the
   law tests, a deploy test and the docs.
 
-## Gates (2026-10-07)
+## Gates (2026-10-08)
 
-All GREEN on the chunk 3 tree:
+All GREEN on the chunk 4a tree:
 
 - `make` (tcc `-Wall -Werror`).
 - `make check-clang`.
-- `make test`: `test/parse.sh` 39 cases (13 round trips), `test/evm.sh` 5
-  cases, `test/check.sh` 39 cases.
+- `make test`: `test/parse.sh` 38 cases (13 round trips), `test/evm.sh` 5
+  cases, `test/check.sh` 39 cases, `test/table.sh` 13 cases.

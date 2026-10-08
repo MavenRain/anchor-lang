@@ -12,8 +12,8 @@ document, no plaintext and no balance.
 
 Status: draft. The front end (lexer, parser, printer), the EVM assembler and
 the checker build. The checker refuses the forms of `SPEC.md` section 2. The
-evaluator and the contract writer do not exist yet, so each verb checks the
-program and then exits 1 with `PLANNED`. See `SPEC.md` section 10 for the
+`anchorc table` prints the outcome of each tally (`SPEC.md` section 7). The
+other verbs check the program and then exit 1 with `PLANNED`. See `SPEC.md` section 10 for the
 milestones.
 
 ## Build
@@ -21,7 +21,8 @@ milestones.
 `make` builds `build/anchorc` with `tcc -std=c99 -Wall -Werror`.
 `make check-clang` checks every C file with
 `cc -std=c99 -Wall -Wextra -Wswitch-enum -Werror -fsyntax-only`.
-`make test` runs `test/parse.sh`, `test/evm.sh` and `test/check.sh`.
+`make test` runs `test/parse.sh`, `test/evm.sh`, `test/check.sh` and
+`test/table.sh`.
 
 ## Layout
 
@@ -51,7 +52,8 @@ milestones.
 - `tools/embed.c`: writes the prelude as C (`build/prelude.c`).
 - `test/`: `parse.sh` (round trips, parse refusals, command line exits),
   `evm.sh` (keccak vectors, assembler bytes), `check.sh` (the prelude, the
-  programs, the mutants and the checker regressions), and the drivers
+  programs, the mutants and the checker regressions), `table.sh` (the
+  table of each program, the mutants under `table`, `TABLE_LIMIT`), and the drivers
   `parsetool.c` and `evmtool.c`; `parser-arms.anc` is a parser regression.
 
 ## License

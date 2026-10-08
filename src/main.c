@@ -6,8 +6,9 @@
  *   anchorc abi PROG                      the entries of the contract (chunk 5)
  * Exit 0 ok, 1 refused, 2 usage or IO; errors go to stderr as
  * "anchorc: CODE: DEF: message". Each verb parses the embedded prelude and
- * PROG and checks them (src/check.h); a program that checks still exits 1
- * with PLANNED until the back end of the verb lands. */
+ * PROG and checks them (src/check.h). table prints the outcome table
+ * (chunk 4a); the other verbs still exit 1 with PLANNED until their back
+ * end lands. */
 #include "check.h"
 #include "prelude.h"
 #include "syntax.h"
@@ -47,6 +48,14 @@ static int arguments_fit(const Verb *verb, int argc, char **argv) {
   return argc == verb->argc;
 }
 
+static int print_table(AnchorChecked *checked) {
+  AnchorTable table;
+  int status = anchor_table(checked, &table);
+  if (status == ANCHOR_EXIT_OK)
+    anchor_print_table(stdout, &table);
+  return status;
+}
+
 static int run(Arena *arena, const Verb *verb, const char *path, Diag *diag) {
   Program prelude;
   const char *prelude_text = (const char *)anchor_prelude_text;
@@ -66,6 +75,8 @@ static int run(Arena *arena, const Verb *verb, const char *path, Diag *diag) {
   status = anchor_check(arena, &prelude, &program, &checked, diag);
   if (status != ANCHOR_EXIT_OK)
     return status;
+  if (strcmp(verb->name, "table") == 0)
+    return print_table(checked);
   diag_set(diag, "PLANNED", span_of("-"), "anchorc %s has no back end yet (SPEC section 10)", verb->name);
   return ANCHOR_EXIT_REFUSED;
 }

@@ -23,4 +23,36 @@ typedef struct AnchorChecked AnchorChecked;
 int anchor_check(Arena *arena, const Program *prelude, const Program *program,
                  AnchorChecked **checked, Diag *diag);
 unsigned anchor_members(const AnchorChecked *checked);
+
+/* The outcome table of a checked program (SPEC section 7). */
+typedef enum { ANCHOR_FATE_NONE = 0, ANCHOR_FATE_ONE = 1, ANCHOR_FATE_TWO = 2 } AnchorFate;
+
+typedef struct {
+  AnchorFate fate;
+  size_t p;  /* ANCHOR_FATE_ONE, ANCHOR_FATE_TWO: a policy number */
+  size_t q;  /* ANCHOR_FATE_TWO: a policy number */
+} AnchorRow;
+
+typedef struct {
+  unsigned members;
+  size_t candidates;     /* K; policies 0 to K-1 are the candidates, in order */
+  size_t npolicies;      /* the candidates, then each other policy of an outcome */
+  const Ast **policies;  /* the closed normal form of each policy */
+  size_t nrows;          /* one row for each tally */
+  const unsigned *counts; /* nrows rows of K counts */
+  const AnchorRow *rows;
+} AnchorTable;
+
+/* Tabulates rule over every tally: each count vector over the candidates
+ * whose sum is members, (members, 0, ..., 0) first and (0, ..., 0,
+ * members) last, in reverse lexicographic order. Each outcome must reduce
+ * to none, one p or two p q with closed policies, and each side of a
+ * two p q must be frozen (the full fork check of SPEC section 2). Returns
+ * ANCHOR_EXIT_OK, or ANCHOR_EXIT_REFUSED with TABLE_LIMIT, TABLE_STUCK,
+ * REFUSE_FORK, TYPE_FUEL or MEMORY. The table lives in the arena of
+ * CHECKED. */
+int anchor_table(AnchorChecked *checked, AnchorTable *table);
+
+/* The stable text form of SPEC section 7. */
+void anchor_print_table(FILE *out, const AnchorTable *table);
 #endif

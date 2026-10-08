@@ -25,7 +25,10 @@ check() {
 
 # Parse, print, parse the print and print again: the two prints are the same.
 for file in prelude/Prelude.anc test/parser-arms.anc examples/programs/arrow-impossibility.anc \
-    examples/programs/arrow-debreu.anc examples/programs/schelling-ising.anc examples/mutants/fork-unfrozen.anc; do
+    examples/programs/arrow-debreu.anc examples/programs/schelling-ising.anc examples/mutants/fork-unfrozen.anc \
+    examples/mutants/data-decl.anc examples/mutants/rec-def.anc examples/mutants/prelude-name.anc \
+    examples/mutants/core-name.anc examples/mutants/hash-projection.anc examples/mutants/log-match.anc \
+    examples/mutants/rule-type.anc; do
   name=$(basename "$file" .anc)
   "$tool" "$root/$file" > "$out/$name.1" 2> "$out/$name.err"
   first=$?

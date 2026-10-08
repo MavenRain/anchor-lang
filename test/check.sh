@@ -48,6 +48,24 @@ done
 # SPEC section 2: a two p q side whose forkFreeze is flagNo.
 refuse "fork-unfrozen is REFUSE_FORK" REFUSE_FORK rule "is flagNo" check "$mutants/fork-unfrozen.anc"
 
+# SPEC section 2 and prelude note P1: each mutant has one defect, and the
+# checker gives its code at the definition with the defect.
+refuse "data-decl is REFUSE_DATA" REFUSE_DATA Color "mu lives in the prelude" check "$mutants/data-decl.anc"
+refuse "rec-def is REFUSE_REC" REFUSE_REC spin "recursion lives in the prelude" check "$mutants/rec-def.anc"
+refuse "prelude-name is REFUSE_NAME" REFUSE_NAME flagYes "flagYes is declared already" check "$mutants/prelude-name.anc"
+refuse "core-name is REFUSE_NAME" REFUSE_NAME Hash "Hash is declared already" check "$mutants/core-name.anc"
+refuse "hash-projection is TYPE_SHAPE" TYPE_SHAPE hashHead "a projection .0 of a term that is not a pair" \
+  check "$mutants/hash-projection.anc"
+refuse "log-match is TYPE_MATCH" TYPE_MATCH logSize "the subject is not of the family AnchorLog with 0 indices" \
+  check "$mutants/log-match.anc"
+refuse "rule-type is TYPE_MISMATCH" TYPE_MISMATCH rule "expected Tally -> Outcome, found Nat -> Outcome" \
+  check "$mutants/rule-type.anc"
+
+# SPEC section 2: the surface has no axiom form, so the parser refuses an
+# axiom before the checker can give REFUSE_AXIOM.
+printf 'axiom x : Nat\n' > "$out/axiom.anc"
+refuse "an axiom is PARSE_EXPECT" PARSE_EXPECT - "expected 'def' or 'mu', found 'axiom'" check "$out/axiom.anc"
+
 # A policy or its freeze flag may branch on the tally. Every branch must
 # freeze, on either side of two. The match variant also exercises a stuck
 # match whose arm contains a case, followed by policyForkFreeze.

@@ -10,24 +10,30 @@ type formers are those of `formers/FORMERS.md` (from lang-template). The
 contract stores hash-time pairs, ballots and member addresses. It stores no
 document, no plaintext and no balance.
 
-Status: draft. The front end (lexer, parser, printer) and the EVM assembler
-build; the checker, the evaluator and the contract writer do not exist yet.
-See `SPEC.md` section 10 for the milestones.
+Status: draft. The front end (lexer, parser, printer), the EVM assembler and
+the checker build. The checker refuses the forms of `SPEC.md` section 2. The
+evaluator and the contract writer do not exist yet, so each verb checks the
+program and then exits 1 with `PLANNED`. See `SPEC.md` section 10 for the
+milestones.
 
 ## Build
 
 `make` builds `build/anchorc` with `tcc -std=c99 -Wall -Werror`.
 `make check-clang` checks every C file with
 `cc -std=c99 -Wall -Wextra -Wswitch-enum -Werror -fsyntax-only`.
-`make test` runs `test/parse.sh` and `test/evm.sh`.
+`make test` runs `test/parse.sh`, `test/evm.sh` and `test/check.sh`.
 
 ## Layout
 
 - `SPEC.md`: the language specification (draft) and the open items.
 - `design/DESIGN.md`: the denotational design, verbatim.
 - `formers/FORMERS.md`: the type former specification.
+- `formers/tcc-evm.md`: the status and the evidence of each former on this
+  host.
+- `probe/CAPABILITY.md`: what the host can do now, and what is PLANNED.
 - `src/`: `anchorc`. `syntax.h` has the grammar and the front end API;
   `arena.c`, `diag.c`, `lexer.c`, `parser.c`, `printer.c` are the front end;
+  `check.c` is the checker and `check.h` its interface;
   `evm.c` is the EVM assembler and the target interface; `keccak.c` is
   Keccak-256; `main.c` is the command line; `prelude.h` declares the
   embedded prelude.
@@ -37,11 +43,15 @@ See `SPEC.md` section 10 for the milestones.
   `arrow-impossibility.anc` (`none`), `arrow-debreu.anc` (`one p`),
   `schelling-ising.anc` (`two p q`).
 - `examples/mutants/`: programs that parse and that the checker must
-  refuse; the first comment names the code (`fork-unfrozen.anc`:
-  `REFUSE_FORK`).
+  refuse; the first comment names the code: `fork-unfrozen.anc`
+  (`REFUSE_FORK`), `data-decl.anc` (`REFUSE_DATA`), `rec-def.anc`
+  (`REFUSE_REC`), `prelude-name.anc` and `core-name.anc` (`REFUSE_NAME`),
+  `hash-projection.anc` (`TYPE_SHAPE`), `log-match.anc` (`TYPE_MATCH`),
+  `rule-type.anc` (`TYPE_MISMATCH`).
 - `tools/embed.c`: writes the prelude as C (`build/prelude.c`).
 - `test/`: `parse.sh` (round trips, parse refusals, command line exits),
-  `evm.sh` (keccak vectors, assembler bytes), and their drivers
+  `evm.sh` (keccak vectors, assembler bytes), `check.sh` (the prelude, the
+  programs, the mutants and the checker regressions), and the drivers
   `parsetool.c` and `evmtool.c`; `parser-arms.anc` is a parser regression.
 
 ## License

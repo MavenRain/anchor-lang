@@ -55,6 +55,25 @@ their policy freeze flags. Every possible fork side must reduce to
 `flagYes`. It conservatively refuses a flag or outcome whose alternatives
 remain unresolved, using `REFUSE_FORK`.
 
+`REFUSE_AXIOM` cannot be reached from the parser. The surface of section 8
+has no axiom form: each declaration starts with `def` or `mu`. Thus the
+parser refuses `axiom x : Nat` with `PARSE_EXPECT` before the checker runs
+(`test/check.sh`).
+
+Chunk 3 checks the forks and the required names as follows. Chunk 4
+tabulates the rule over the tallies and makes the full fork check.
+
+- A fork side whose freeze flag does not normalize to a closed flag, after
+  the checker explores each `case` and `match` arm of the flag, is
+  `REFUSE_FORK`. My choice, not ruled.
+- A stuck outcome of `rule` with no `case` or `match` to explore is
+  `REFUSE_FORK`, because the checker cannot see its fork. My choice, not
+  ruled.
+- The checker finds `candidates` and `rule` by presence and type
+  (`Candidates`, `Tally -> Outcome`), in any order after `members`. A
+  missing one is `TYPE_SCOPE`. A wrong type is `TYPE_MISMATCH`
+  (`examples/mutants/rule-type.anc`). My choice, not ruled.
+
 Thus a program cannot add a data type, an unproved fact or general
 recursion. Recursion comes only from `fold` (F6). The compiler writes the
 target; a program cannot.
@@ -67,12 +86,27 @@ projection to plaintext, a morphism to an author, or a balance monoid
 ## 3. Type formers
 
 The type formers are F1 to F15 of `formers/FORMERS.md`. This language uses a
-new host column, `tcc-evm`. `formers/tcc-evm.md` does not exist yet. Chunk 3
-(section 10) writes it with a status and evidence for each former.
+new host column, `tcc-evm`. `formers/tcc-evm.md` gives a status and the
+evidence for each former. A status is for the checker of chunk 3. The
+evaluator (chunk 4) and the contract writer (chunk 5) are PLANNED.
 
 | ID | Status on tcc-evm | Effect on this language | Open item |
 |---|---|---|---|
-| F1-F15 | PLANNED | the checker does not exist yet | O9 |
+| F1 Product | DONE | `prod`, `tuple`, `.0`, `.1`; `AnchorPair` | none |
+| F2 Coproduct | DONE | `sum`, `inj`, `case`; `Flag` | none |
+| F3 Option | DONE | `Option A := sum (prod (), A)`; `candidateAt` | none |
+| F4 List | PARTIAL | one `mu` family for each element type: `Candidates`, `Profile` | none |
+| F5 Monad | PARTIAL | over `Option` only: `optionPure`, `optionBind`, `optionMap` | none |
+| F6 Algebra fold | PARTIAL | `candidatesFold` and `profileFold` in the prelude; no fold on `Nat` (prelude note P10) | none |
+| F7 Algebra unfold | HOST-LIMIT | no unfold: recursion is structural only, and a program has no `def rec` | none |
+| F8 Filterable filter | PARTIAL | over `Profile` only: `profileFilter` | none |
+| F9 Pi, not dependent | DONE | `rule : Tally -> Outcome` | none |
+| F10 Pi, dependent | DONE | erased type inputs; `amendKeepsGov` | none |
+| F11 Sigma | DONE | `AnchorDAO F := (L : Aggregation F) * AnchorLog`, read by `.0` and `.1` | none |
+| F12 Eq refl, symm, trans | PARTIAL | `EqOutcome` with refl (`sameOutcome`) only | none |
+| F13 Eq transport, cong | PLANNED | no prelude definition yet | none |
+| F14 Universes | PARTIAL | `Type 0 : Type 1`; Pi, Sigma, product and sum types can inhabit `Type 1`; an explicit `Type 1` annotation is refused | none |
+| F15 Indexed family | DONE | `EqOutcome`, `Aggregation F` | none |
 
 ## 4. Structures
 
@@ -212,7 +246,9 @@ representation for indexers. The design model is not an event log.
   can return the host to lang-template as `hosts/tcc-evm`.
 - Gate tools: geth `evm` (1.14.12) runs the bytecode; Foundry `cast` gives
   calldata and selectors as an oracle. The build does not need them.
-- `probe/CAPABILITY.md` does not exist yet. Chunk 3 writes it.
+- `probe/CAPABILITY.md` records what the host can do now: the TinyCC
+  build, the EVM assembler, the checker and its codes, and the PLANNED
+  work of chunks 4 to 6.
 
 ## 9. Open items
 
@@ -283,12 +319,17 @@ for each fate: `arrow-impossibility.anc` (`none`), `arrow-debreu.anc`
 (parse.sh 32 cases: 6 round trips, embedded prelude, 13 refusals, 12
 command line exits; evm.sh 5 cases).
 
-Status 2026-10-07: chunk 3a staged. `src/check.{h,c}` is the checker of
+Status 2026-10-07: chunk 3 staged. `src/check.{h,c}` is the checker of
 the origin compiler of section 8 (bidirectional, conversion by
 normalization), with the core names of prelude note P1 as opaque globals,
 the codes `REFUSE_MEMBERS`, `REFUSE_DATA`, `REFUSE_REC`, `REFUSE_NAME` and
 `REFUSE_FORK`, and the required `candidates` and `rule`. Each verb checks the
-prelude and PROG, then exits 1 with `PLANNED`. Gate GREEN: `make`,
-`make check-clang`, `make test` (`test/check.sh` includes conditional fork
-and type-erasure regressions). Chunk 3b adds the
-refusal mutants, `formers/tcc-evm.md` and `probe/CAPABILITY.md`.
+prelude and PROG, then exits 1 with `PLANNED`. `examples/mutants/` has one
+mutant for each refusal of section 2 that the parser lets through, two for
+the opaque core names (`TYPE_SHAPE`, `TYPE_MATCH`) and one for the type of
+`rule` (`TYPE_MISMATCH`). `REFUSE_AXIOM` cannot be reached (section 2).
+`formers/tcc-evm.md` gives the status of F1 to F15, and
+`probe/CAPABILITY.md` gives the host facts. Gate GREEN: `make`,
+`make check-clang`, `make test` (parse.sh 39 cases: 13 round trips,
+embedded prelude, 13 refusals, 12 command line exits; evm.sh 5 cases;
+check.sh 39 cases, with the conditional fork and type erasure regressions).

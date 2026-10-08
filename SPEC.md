@@ -116,8 +116,8 @@ outcomes (chunk 4a), and the runtime reads them from the outcome table
 | F9 Pi, not dependent | DONE | `rule : Tally -> Outcome` | none |
 | F10 Pi, dependent | DONE | erased type inputs; `amendKeepsGov` | none |
 | F11 Sigma | DONE | `AnchorDAO F := (L : Aggregation F) * AnchorLog`, read by `.0` and `.1` | none |
-| F12 Eq refl, symm, trans | PARTIAL | `EqOutcome` with refl (`sameOutcome`) only | none |
-| F13 Eq transport, cong | PLANNED | no prelude definition yet | none |
+| F12 Eq refl, symm, trans | PARTIAL | one family, `EqOutcome`: refl (`sameOutcome`), `symmOutcome`, `transOutcome`; no generic `Eq` | none |
+| F13 Eq transport, cong | PARTIAL | `transportOutcome` and `congOutcome` for `EqOutcome` only; no generic `Eq`, no heterogeneous cong | none |
 | F14 Universes | PARTIAL | `Type 0 : Type 1`; Pi, Sigma, product and sum types can inhabit `Type 1`; an explicit `Type 1` annotation is refused | none |
 | F15 Indexed family | DONE | `EqOutcome`, `Aggregation F` | none |
 
@@ -515,8 +515,8 @@ representation for indexers. The design model is not an event log.
   `Clock t` is always true.
 - O2. Fork fate. RULED 2026-10-07 (USER): ForkFreeze is forced. A
   Schelling-Ising contract admits nothing new, and `verify` reads the whole
-  log, which is then the shared prefix. The encoding of the fork as a
-  `two p q` outcome at a tally is my choice and is not ruled.
+  log, which is then the shared prefix. RULED 2026-10-08 (USER): the fork
+  is a `two p q` outcome at a tally.
 - O3. `amend`. The design forces `GovPhi canonicalAmendment L = Gov L`. M1
   has only the canonical amendment, so there is no `amend` entry.
   `test/laws.sh` tests the identity on the log: the `amend` selectors
@@ -525,23 +525,23 @@ representation for indexers. The design model is not an event log.
   and under which rule. Not ruled.
 - O4. `HashDom`. M1 has one value, `nonZero` (`h != 0`). The chain cannot
   see which function made a digest. Not ruled.
-- O5. Member addresses. Constructor arguments, one per member position, so
-  the program holds no address value. Not ruled.
-- O6. Schema version. The design says it "only increases". Proposal: `cast`
-  reverts when it moves a `one p` outcome to a policy with a lower
-  `schema`. Not ruled. The guard of section 7 applies when the outcomes
+- O5. Member addresses. RULED 2026-10-08 (USER): constructor arguments, one
+  per member position, so the program holds no address value.
+- O6. Schema version. The design says it "only increases". RULED 2026-10-08
+  (USER): `cast` reverts when it moves a `one p` outcome to a policy with a
+  lower `schema`. The guard of section 7 applies when the outcomes
   before and after the move are both `one`.
 - O7. Challenge window and dispute annotations. No operation in the design
   dictionary reads `window`. M1 carries it in the policy and no entry reads
   it. Dispute annotations (metadata, never removal) are not in M1. Not
   ruled.
-- O8. Symmetry group. M1 uses the full symmetric group on the member
-  positions. The trivial group makes anonymity vacuous (design section 3).
-  Not ruled.
+- O8. Symmetry group. RULED 2026-10-08 (USER): the full symmetric group on
+  the member positions. The trivial group makes anonymity vacuous (design
+  section 3).
 - O9. Admit. RULED 2026-10-07 (USER): members only. The caller must be a
   member and `admit` must give `flagYes`.
-- O10. Initial profile. Proposal: every ballot starts at candidate 0, the
-  genesis policy. Not ruled.
+- O10. Initial profile. RULED 2026-10-08 (USER): every ballot starts at
+  candidate 0, the genesis policy.
 
 ## 10. Milestones
 
@@ -557,6 +557,7 @@ staged, and a status line here. The USER commits.
 | M2 | 4 | Evaluator, tabulation, fate report: `anchorc check`, `table`, `eval` |
 | M2 | 5 | Contract writer: entries, storage, outcome table, `Anchored` log; `anchorc build`, `abi` |
 | M3 | 6 | Differential tests against geth `evm` on call traces; law tests (monotone, idempotent, distinct anchors commute, no deletion, `amend` is the identity on the log, no admit at a `two` tally); deploy test; docs |
+| M4 | 7 | F13: `transportOutcome` and `congOutcome` for `EqOutcome`, with `symmOutcome` and `transOutcome` (F12); check, eval and build tests |
 
 Status 2026-10-07: chunk 0 staged.
 
@@ -650,3 +651,42 @@ source `test/evmchain.sh`, which has no cases. There is no change to
 cases; evm.sh 9 cases; check.sh 40 cases; table.sh 13 cases; eval.sh 24
 cases; build.sh 33 cases; run.sh 19 cases; deploy.sh 13 cases; diff.sh 45
 cases; laws.sh 23 cases), 257 cases in all.
+
+M4 (chunk 7) design defaults:
+
+- a. One family only: `EqOutcome`. The prelude adds `transportOutcome` and
+  `congOutcome`. There is no new Eq family (no `EqTally`, `EqPolicy` or
+  `EqNat`). My choice, not ruled.
+- b. No heterogeneous cong, because it needs a second family. `congOutcome`
+  takes `f : Outcome -> Outcome`. My choice, not ruled.
+- c. The prelude also adds `symmOutcome` and `transOutcome` (F12).
+  `transOutcome` uses `transportOutcome`, as in the origin compiler of
+  section 8. My choice, not ruled.
+- d. Surface: prelude defs with the family suffix and explicit erased
+  arguments, in the form of the origin compiler. There is no generic `Eq`,
+  because a family with a type index is outside the F14 policy
+  (`formers/FORMERS.md:216-218`). My choice, not ruled.
+- e. Computation is definitional. `transportOutcome P o o (sameOutcome o)
+  u` reduces to `u` through the dependent match of the checker. `src/` has
+  no special case for Eq, and chunk 7 does not change `src/`. My choice, not
+  ruled.
+- f. Erasure: the proof argument is relevant; `P`, `x` and `y` are erased.
+  Proofs erase from the target (section 7). A rule that calls
+  `transportOutcome` builds, and its bytecode is the bytecode of
+  `arrow-impossibility.anc` (`test/build.sh`). A match on an erased proof is
+  `TYPE_ERASED`. My choice, not ruled.
+- g. Place: the new defs come after the last def of the prelude, so the
+  prelude line citations of `formers/tcc-evm.md` do not move. My choice,
+  not ruled.
+
+Status 2026-10-08: chunk 7 staged. Chunk 7 is M4 (F13). The prelude adds
+`transportOutcome`, `congOutcome`, `symmOutcome` and `transOutcome` for
+`EqOutcome` after its last def. Both laws of F13 hold by definition
+(`test/eval.sh`). Two new mutants, `cong-type.anc` and
+`transport-motive.anc`, are `TYPE_MISMATCH`. `test/table.sh`,
+`test/eval.sh` and `test/build.sh` read each mutant, so each of these
+files gets two more cases. There is no change to `src/`. Gate GREEN:
+`make`, `make check-clang`, `make test` (parse.sh 40
+cases; evm.sh 9 cases; check.sh 45 cases; table.sh 15 cases; eval.sh 28
+cases; build.sh 36 cases; run.sh 19 cases; deploy.sh 13 cases; diff.sh 45
+cases; laws.sh 23 cases), 273 cases in all.

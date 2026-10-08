@@ -28,7 +28,7 @@ for file in prelude/Prelude.anc test/parser-arms.anc examples/programs/arrow-imp
     examples/programs/arrow-debreu.anc examples/programs/schelling-ising.anc examples/mutants/fork-unfrozen.anc \
     examples/mutants/data-decl.anc examples/mutants/rec-def.anc examples/mutants/prelude-name.anc \
     examples/mutants/core-name.anc examples/mutants/hash-projection.anc examples/mutants/log-match.anc \
-    examples/mutants/rule-type.anc; do
+    examples/mutants/rule-type.anc examples/mutants/cong-type.anc examples/mutants/transport-motive.anc; do
   name=$(basename "$file" .anc)
   "$tool" "$root/$file" > "$out/$name.1" 2> "$out/$name.err"
   first=$?

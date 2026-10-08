@@ -19,7 +19,8 @@ sections 6 and 7). `anchorc abi` prints the entries and the log of the contract,
 outcome table at the end of the runtime (chunk 5, `SPEC.md` section 7).
 The tests of chunk 6 (M3) run the contract on geth `evm`: a deploy test, a
 differential test against a model of the outcome table and the law tests
-of the log.
+of the log. Chunk 7 (M4) adds `transportOutcome`, `congOutcome`,
+`symmOutcome` and `transOutcome` for `EqOutcome` to the prelude (F12, F13).
 See `SPEC.md` section 10 for the milestones.
 
 ## Build

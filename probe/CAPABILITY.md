@@ -1,6 +1,6 @@
-# anchor-lang host capability: TinyCC to EVM (M1, 2026-10-07)
+# anchor-lang host capability: TinyCC to EVM (M4, 2026-10-08)
 
-This file records what the `tcc-evm` host can do at the end of chunk 6
+This file records what the `tcc-evm` host can do at the end of chunk 7
 (SPEC section 10). The host is the C99 compiler `anchorc`, built by
 TinyCC. The target is EVM bytecode for one contract. Each fact cites a file
 or a test. PLANNED work has no evidence yet.
@@ -110,17 +110,18 @@ tabulates the rule and makes the full fork check.
 
 ## Planned
 
-Nothing after chunk 6. SPEC section 10 names no milestone after M3.
+Nothing after chunk 7. SPEC section 10 names no milestone after M4. The
+port of the host to lang-template comes after M4.
 
 ## Gates (2026-10-08)
 
-All GREEN on the chunk 6 tree:
+All GREEN on the chunk 7 tree:
 
 - `make` (tcc `-Wall -Werror`).
 - `make check-clang`.
-- `make test`: `test/parse.sh` 38 cases (13 round trips), `test/evm.sh` 9
-  cases, `test/check.sh` 40 cases, `test/table.sh` 13 cases,
-  `test/eval.sh` 24 cases, including both recursive prelude defs,
-  `test/build.sh` 33 cases, `test/run.sh` 19 cases, `test/deploy.sh` 13
+- `make test`: `test/parse.sh` 40 cases (15 round trips), `test/evm.sh` 9
+  cases, `test/check.sh` 45 cases, `test/table.sh` 15 cases,
+  `test/eval.sh` 28 cases, including both recursive prelude defs and both
+  laws of F13, `test/build.sh` 36 cases, `test/run.sh` 19 cases, `test/deploy.sh` 13
   cases, `test/diff.sh` 45 cases and `test/laws.sh` 23 cases, the last
-  four on geth `evm` 1.14.12 (257 cases in all).
+  four on geth `evm` 1.14.12 (273 cases in all).

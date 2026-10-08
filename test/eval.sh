@@ -1,6 +1,6 @@
 #!/bin/sh
 # Eval tests of anchorc, run by make test after make (SPEC section 10,
-# chunk 4b): eval prints the normal form of a def of each example program,
+# chunks 4b and 7): eval prints the normal form of a def of each example program,
 # a name that is not a def gives EVAL_NAME, and each mutant keeps its code
 # under eval. Files go to build/test. Each run stays far under 4 GB: the
 # arena of one run takes at most ANCHOR_ARENA_MAX (src/syntax.h).
@@ -94,6 +94,33 @@ for fold in candidatesFold profileFold; do
     fail "eval $fold round trip: exit $status, stderr: $(cat "$out/eval.err")"
   fi
 done
+
+# SPEC section 3, F13: transport and cong of EqOutcome compute by
+# definition. At sameOutcome, transport gives its input and cong gives
+# sameOutcome (f o).
+{ cat "$programs/arrow-impossibility.anc"; cat <<'EOF'
+
+def lawTransport : Outcome -> Outcome :=
+  fun (u : Outcome) => transportOutcome (fun (w : Outcome) => Outcome) none none (sameOutcome none) u
+def lawCong : (o : Outcome) -> EqOutcome (one genesis) (one genesis) :=
+  fun (o : Outcome) => congOutcome (fun (w : Outcome) => one genesis) o o (sameOutcome o)
+EOF
+} > "$out/eval-eq.anc"
+
+# law_is NAME WANT: eval of NAME in eval-eq.anc exits 0 and stdout is the line WANT.
+law_is() {
+  "$anchorc" eval "$out/eval-eq.anc" "$1" > "$out/eval.out" 2> "$out/eval.err"
+  status=$?
+  printf '%s\n' "$2" > "$out/eval.want"
+  if [ "$status" -eq 0 ] && cmp -s "$out/eval.out" "$out/eval.want"; then
+    pass "eval law $1"
+  else
+    fail "eval law $1: exit $status, stderr: $(cat "$out/eval.err")"
+    diff "$out/eval.want" "$out/eval.out"
+  fi
+}
+law_is lawTransport "fun ($t : Outcome) => $t"
+law_is lawCong "fun ($t : Outcome) => sameOutcome (one ($open))"
 
 # A name that is not a def of the prelude or the program is EVAL_NAME.
 program=$programs/arrow-debreu.anc

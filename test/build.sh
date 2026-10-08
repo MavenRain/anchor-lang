@@ -1,6 +1,6 @@
 #!/bin/sh
 # Back-end tests of anchorc, run by make test after make (SPEC section 10,
-# chunks 5a and 5b): abi of each example program gives its golden text, each
+# chunks 5a, 5b and 7): abi of each example program gives its golden text, each
 # selector is the first 4 bytes of keccak256 of its signature, build writes
 # lowercase hex, the runtime holds each selector, the creation code ends
 # with the runtime code, the runtime ends with the rows and the policy
@@ -120,6 +120,26 @@ for f in "$mutants"/*.anc; do
     fail "mutant $(basename "$f"): exit $abi_status and $build_status, check$want, abi$abi, build$build"
   fi
 done
+
+# SPEC section 3, F13: a rule that calls transportOutcome builds. The proof
+# computes away when build tabulates the rule, so the bytecode is the
+# bytecode of arrow-impossibility.anc, whose rule gives none with no proof.
+{ head -n 12 "$programs/arrow-impossibility.anc"; cat <<'EOF'
+
+def rule : Tally -> Outcome :=
+  fun (t : Tally) => transportOutcome (fun (w : Outcome) => Outcome) none none (sameOutcome none) none
+EOF
+} > "$out/transport-rule.anc"
+rm -f "$out/transport.hex" "$out/plain.hex"
+"$anchorc" build "$out/transport-rule.anc" -o "$out/transport.hex" 2> "$out/build.err"
+first=$?
+"$anchorc" build "$programs/arrow-impossibility.anc" -o "$out/plain.hex" 2>> "$out/build.err"
+second=$?
+if [ "$first" -eq 0 ] && [ "$second" -eq 0 ] && cmp -s "$out/transport.hex" "$out/plain.hex"; then
+  pass "a rule through transportOutcome builds the bytecode of arrow-impossibility.anc"
+else
+  fail "a rule through transportOutcome: exit $first and $second, stderr: $(cat "$out/build.err")"
+fi
 
 # EIP-3860: the creation code and 32 bytes for each member word are at most
 # 49152 bytes. The table grows with the members, so a bisection over 256 to

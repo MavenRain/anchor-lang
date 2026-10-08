@@ -1,6 +1,6 @@
 #!/bin/sh
 # Checker tests of anchorc, run by make test after make (SPEC section 10,
-# chunks 3 and 4b): the prelude, the fate report of each example program
+# chunks 3, 4b and 7): the prelude, the fate report of each example program
 # and the mutants in examples/mutants. Files go to build/test. Each run stays far under 4 GB:
 # the arena of one run takes at most ANCHOR_ARENA_MAX (src/syntax.h).
 set -u
@@ -120,6 +120,25 @@ refuse "log-match is TYPE_MATCH" TYPE_MATCH logSize "the subject is not of the f
 refuse "rule-type is TYPE_MISMATCH" TYPE_MISMATCH rule "expected Tally -> Outcome, found Nat -> Outcome" \
   check "$mutants/rule-type.anc"
 
+# SPEC section 3, F13: transport and cong of EqOutcome are prelude defs. A
+# program can use them, a wrong motive or result type is TYPE_MISMATCH, and
+# a program cannot define them again.
+one_genesis='one (mkPolicy allow nonZero blockTime 0 1 (inj 1 of 2 (tuple ())))'
+refuse "cong-type is TYPE_MISMATCH" TYPE_MISMATCH congWrong "found EqOutcome ($one_genesis) ($one_genesis)" \
+  check "$mutants/cong-type.anc"
+refuse "transport-motive is TYPE_MISMATCH" TYPE_MISMATCH moved "expected Outcome, found Policy" \
+  check "$mutants/transport-motive.anc"
+{ cat "$programs/arrow-impossibility.anc"; cat <<'EOF'
+
+def keep : Outcome := transportOutcome (fun (w : Outcome) => Outcome) none none (sameOutcome none) (one genesis)
+def lift : EqOutcome (one genesis) (one genesis) := congOutcome (fun (w : Outcome) => one genesis) none none (sameOutcome none)
+EOF
+} > "$out/eq-use.anc"
+accepts "a program uses transportOutcome and congOutcome" "$out/eq-use.anc"
+{ head -n 12 "$programs/arrow-impossibility.anc"; printf '\ndef transportOutcome : Nat := 1\n'; tail -n +13 "$programs/arrow-impossibility.anc"; } > "$out/eq-name.anc"
+refuse "a program that defines transportOutcome is REFUSE_NAME" REFUSE_NAME transportOutcome \
+  "transportOutcome is declared already" check "$out/eq-name.anc"
+
 # SPEC section 2: the surface has no axiom form, so the parser refuses an
 # axiom before the checker can give REFUSE_AXIOM.
 printf 'axiom x : Nat\n' > "$out/axiom.anc"
@@ -208,7 +227,7 @@ def rule : Tally -> Outcome := fun (t : Tally) => none
 EOF
 accepts "erased inputs construct types" "$out/erased-types.anc"
 
-for use in direct application case match projection mismatch; do
+for use in direct application case match proof projection mismatch; do
   fixture=$out/erased-$use.anc
   printf 'def members : Nat := 1\n' > "$fixture"
   case $use in
@@ -235,6 +254,13 @@ def leak : (0 v : Verdict) -> Nat := fun (0 v : Verdict) =>
   match v as w in Verdict return Nat with
   | allow => 0
   | deny => 1
+EOF
+      ;;
+    proof)
+      cat >> "$fixture" <<'EOF'
+def leak : (0 e : EqOutcome none none) -> Nat := fun (0 e : EqOutcome none none) =>
+  match e as q in EqOutcome i j return Nat with
+  | sameOutcome 0 z => 0
 EOF
       ;;
     projection)

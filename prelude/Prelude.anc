@@ -272,3 +272,26 @@ def constitutionOf : (Tally -> Outcome) -> Constitution :=
 def aggregationOf : (r : Tally -> Outcome) -> Aggregation (constitutionOf r) :=
   fun (r : Tally -> Outcome) =>
     aggregate (constitutionOf r) r (fun (x : Profile) => sameOutcome (r (orbitProjection x)))
+
+-- Transport, symmetry, transitivity and cong of EqOutcome (F12, F13).
+-- Each one is a dependent match on the proof, so at `sameOutcome o` it
+-- computes by definition: transport gives its input `u`, and cong gives
+-- `sameOutcome (f o)`.  The motive and the indices are erased.
+def transportOutcome : (0 P : Outcome -> Type 0) -> (0 x : Outcome) -> (0 y : Outcome) -> EqOutcome x y -> P x -> P y :=
+  fun (0 P : Outcome -> Type 0) (0 x : Outcome) (0 y : Outcome) (e : EqOutcome x y) =>
+    match e as q in EqOutcome i j return P i -> P j with
+    | sameOutcome 0 z => fun (u : P z) => u
+
+def symmOutcome : (0 x : Outcome) -> (0 y : Outcome) -> EqOutcome x y -> EqOutcome y x :=
+  fun (0 x : Outcome) (0 y : Outcome) (e : EqOutcome x y) =>
+    match e as q in EqOutcome i j return EqOutcome j i with
+    | sameOutcome 0 z => sameOutcome z
+
+def transOutcome : (0 x : Outcome) -> (0 y : Outcome) -> (0 z : Outcome) -> EqOutcome x y -> EqOutcome y z -> EqOutcome x z :=
+  fun (0 x : Outcome) (0 y : Outcome) (0 z : Outcome) (e1 : EqOutcome x y) (e2 : EqOutcome y z) =>
+    transportOutcome (fun (w : Outcome) => EqOutcome x w) y z e2 e1
+
+def congOutcome : (f : Outcome -> Outcome) -> (0 x : Outcome) -> (0 y : Outcome) -> EqOutcome x y -> EqOutcome (f x) (f y) :=
+  fun (f : Outcome -> Outcome) (0 x : Outcome) (0 y : Outcome) (e : EqOutcome x y) =>
+    match e as q in EqOutcome i j return EqOutcome (f i) (f j) with
+    | sameOutcome 0 z => sameOutcome (f z)

@@ -84,12 +84,12 @@ check "anchorc check of a missing file is IO" $? 2 "$out/io.err" "anchorc: IO_RE
 "$anchorc" check "$out/bad-token.anc" > /dev/null 2> "$out/refused.err"
 check "anchorc check of a bad file is refused" $? 1 "$out/refused.err" "anchorc: LEX_TOKEN: x: "
 program=$root/examples/programs/arrow-debreu.anc
-for verb in check abi; do
-  "$anchorc" $verb "$program" > /dev/null 2> "$out/verb.err"
-  check "anchorc $verb is PLANNED" $? 1 "$out/verb.err" "anchorc: PLANNED: -: "
-done
+"$anchorc" check "$program" > /dev/null 2> "$out/verb.err"
+check "anchorc check exits 0" $? 0 "$out/verb.err" ""
 "$anchorc" eval "$program" members > /dev/null 2> "$out/verb.err"
-check "anchorc eval is PLANNED" $? 1 "$out/verb.err" "anchorc: PLANNED: -: "
+check "anchorc eval exits 0" $? 0 "$out/verb.err" ""
+"$anchorc" abi "$program" > /dev/null 2> "$out/verb.err"
+check "anchorc abi is PLANNED" $? 1 "$out/verb.err" "anchorc: PLANNED: -: "
 "$anchorc" build "$program" --runtime -o "$out/x.hex" > /dev/null 2> "$out/verb.err"
 check "anchorc build is PLANNED" $? 1 "$out/verb.err" "anchorc: PLANNED: -: "
 

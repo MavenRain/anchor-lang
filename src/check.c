@@ -1710,8 +1710,16 @@ int anchor_table(AnchorChecked *c, AnchorTable *t) {
   return ANCHOR_EXIT_OK;
 }
 
+static const char *const FATES[3] = {"none", "one", "two"};
+
+/* "tally c0 ... cK-1" of row R, with no newline. */
+static void print_tally(FILE *out, const AnchorTable *t, size_t r) {
+  fputs("tally", out);
+  for (size_t j = 0; j < t->candidates; j++)
+    fprintf(out, " %u", t->counts[r * t->candidates + j]);
+}
+
 void anchor_print_table(FILE *out, const AnchorTable *t) {
-  static const char *const fates[3] = {"none", "one", "two"};
   fprintf(out, "members %u\ncandidates %lu\n", t->members, (unsigned long)t->candidates);
   for (size_t i = 0; i < t->npolicies; i++) {
     fprintf(out, "policy %lu ", (unsigned long)i);
@@ -1720,14 +1728,48 @@ void anchor_print_table(FILE *out, const AnchorTable *t) {
   }
   for (size_t r = 0; r < t->nrows; r++) {
     const AnchorRow *row = &t->rows[r];
-    fputs("tally", out);
-    for (size_t j = 0; j < t->candidates; j++)
-      fprintf(out, " %u", t->counts[r * t->candidates + j]);
-    fprintf(out, " : %s", fates[row->fate]);
+    print_tally(out, t, r);
+    fprintf(out, " : %s", FATES[row->fate]);
     if (row->fate != ANCHOR_FATE_NONE)
       fprintf(out, " %lu", (unsigned long)row->p);
     if (row->fate == ANCHOR_FATE_TWO)
       fprintf(out, " %lu", (unsigned long)row->q);
     fputc('\n', out);
   }
+}
+
+/* ---- the fate report and eval (chunk 4b) ---- */
+
+void anchor_print_report(FILE *out, const AnchorTable *t) {
+  fprintf(out, "members %u\ncandidates %lu\n", t->members, (unsigned long)t->candidates);
+  for (size_t f = 0; f < 3; f++) {
+    size_t n = 0;
+    for (size_t r = 0; r < t->nrows; r++)
+      n += t->rows[r].fate == (AnchorFate)f;
+    fprintf(out, "fate %s %lu\n", FATES[f], (unsigned long)n);
+    for (size_t r = 0; r < t->nrows; r++)
+      if (t->rows[r].fate == (AnchorFate)f) {
+        print_tally(out, t, r);
+        fputc('\n', out);
+      }
+  }
+}
+
+int anchor_eval(AnchorChecked *c, const char *name, FILE *out) {
+  if (c->failed)
+    return ANCHOR_EXIT_REFUSED;
+  Global *g = find_global(c, name);
+  if (g == NULL)
+    return refuse(c, "EVAL_NAME", name, "is not declared");
+  if ((g->kind != G_DEF && g->kind != G_REC) || g->decl == NULL)
+    return refuse(c, "EVAL_NAME", name, "is not a def");
+  c->def = span_of(g->name);
+  c->loc = g->decl->loc;
+  c->fuel = CHECK_FUEL;
+  Ast *t = quote(c, g->kind == G_REC ? g->body : g->value, 0);
+  if (c->failed)
+    return ANCHOR_EXIT_REFUSED;
+  anchor_print_term(out, t);
+  fputc('\n', out);
+  return ANCHOR_EXIT_OK;
 }

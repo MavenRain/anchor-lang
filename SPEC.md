@@ -98,7 +98,8 @@ projection to plaintext, a morphism to an author, or a balance monoid
 The type formers are F1 to F15 of `formers/FORMERS.md`. This language uses a
 new host column, `tcc-evm`. `formers/tcc-evm.md` gives a status and the
 evidence for each former. A status is for the checker of chunk 3. The
-evaluator (chunk 4) and the contract writer (chunk 5) are PLANNED.
+evaluator of chunk 4 uses the normalizer of the checker. The contract
+writer (chunk 5) is PLANNED.
 
 | ID | Status on tcc-evm | Effect on this language | Open item |
 |---|---|---|---|
@@ -171,7 +172,7 @@ no delete, no update and no retention operation. A retention map is a view
 
 The fate of a tally is its outcome: `none` is Arrow-Impossibility, `one p`
 is Arrow-Debreu, `two p q` is Schelling-Ising. The program fate report lists
-the tallies of each fate. Because `REFUSE_FORK` forces `ForkFreeze`, a
+the tallies of each fate (`anchorc check`, section 7). Because `REFUSE_FORK` forces `ForkFreeze`, a
 Schelling-Ising tally admits nothing. No branch-local pair can exist, so the
 shared prefix is the log, and `verify` reads the log (O2).
 
@@ -261,6 +262,28 @@ numbers (prelude note P5). Each outcome must reduce to `none`, `one p` or
 `TABLE_LIMIT`. With 2 candidates, 4095 members give the largest table.
 My choice, not ruled. The arena of one run (`ANCHOR_ARENA_MAX`, 256 MiB)
 also bounds the memory of the table.
+
+`anchorc check PROG` (chunk 4b) prints the fate report of section 6 from
+the same table, in this stable text form, one item on each line:
+
+- `members M`, then `candidates K`, as in the table.
+- `fate none N`, then the N tallies whose outcome is `none`, one
+  `tally c0 ... cK-1` line for each, in the order of the table. Then
+  `fate one N` and `fate two N` in the same form.
+
+The report gives no policy numbers. `anchorc table` gives them. `check`
+tabulates one time, so its refusals include the codes of the table
+(`TABLE_LIMIT`, `TABLE_STUCK`, `REFUSE_FORK`). My choice, not ruled.
+
+`anchorc eval PROG NAME` (chunk 4b) prints the normal form of the def NAME
+of the prelude or PROG, including a prelude `def rec`, in the canonical
+form of the printer, then exits 0. A recursive def prints its normalized
+body; recursive calls on a neutral argument keep their name.
+The compiler names each bound variable of the normal form (`anchorq0x0`).
+`eval` does not tabulate, so a program whose table is `TABLE_LIMIT` still
+evaluates. A NAME that is not declared, or that is not a def (a `mu`, a
+constructor or a core name), is `EVAL_NAME`. My choice, not ruled. The fuel
+(`CHECK_FUEL`) and the arena bound `eval` as they bound the checker.
 
 Types, `Eq` proofs and universes erase. The `Anchored` log is
 representation for indexers. The design model is not an event log.
@@ -373,3 +396,14 @@ each tally (section 7) and makes the full fork check (section 2).
 trips, embedded prelude, 13 refusals, 11 command line exits; evm.sh 5
 cases; check.sh 39 cases; table.sh 13 cases: the table of each example
 program, the code of each mutant under `table`, the `TABLE_LIMIT` bound).
+
+Status 2026-10-08: chunk 4b staged. `anchorc check` prints the fate report
+of section 6 from the table of chunk 4a (section 7). `anchorc eval` prints
+the normal form of a def, else `EVAL_NAME` (section 7). `build` and `abi`
+(chunk 5) still exit 1 with `PLANNED`. Gate GREEN: `make`,
+`make check-clang`, `make test` (parse.sh 38 cases: 13 round trips,
+embedded prelude, 13 refusals, 11 command line exits; evm.sh 5 cases;
+check.sh 40 cases: the fate report of each example program and
+`TABLE_LIMIT` under `check`; table.sh 13 cases; eval.sh 24 cases: 9 normal
+forms, 2 recursive-def round trips, 4 `EVAL_NAME` names, `eval` of a `TABLE_LIMIT` program, the code of
+each mutant under `eval`).

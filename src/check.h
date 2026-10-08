@@ -55,4 +55,14 @@ int anchor_table(AnchorChecked *checked, AnchorTable *table);
 
 /* The stable text form of SPEC section 7. */
 void anchor_print_table(FILE *out, const AnchorTable *table);
+
+/* The fate report of SPEC section 6, in the text form of SPEC section 7:
+ * the tallies of each fate of TABLE. */
+void anchor_print_report(FILE *out, const AnchorTable *table);
+
+/* Prints the normal form of the def or def rec NAME (of the prelude or the program)
+ * in the canonical form of the printer, then a newline. Returns
+ * ANCHOR_EXIT_OK, or ANCHOR_EXIT_REFUSED with EVAL_NAME (NAME is not
+ * declared or is not a def), TYPE_FUEL or MEMORY. */
+int anchor_eval(AnchorChecked *checked, const char *name, FILE *out);
 #endif

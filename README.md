@@ -12,8 +12,10 @@ document, no plaintext and no balance.
 
 Status: draft. The front end (lexer, parser, printer), the EVM assembler and
 the checker build. The checker refuses the forms of `SPEC.md` section 2. The
-`anchorc table` prints the outcome of each tally (`SPEC.md` section 7). The
-other verbs check the program and then exit 1 with `PLANNED`. See `SPEC.md` section 10 for the
+`anchorc check` prints the fate report, `anchorc table` prints the outcome
+of each tally and `anchorc eval` prints the normal form of a def (`SPEC.md`
+sections 6 and 7). `anchorc build` and `anchorc abi` check the program and
+then exit 1 with `PLANNED`. See `SPEC.md` section 10 for the
 milestones.
 
 ## Build
@@ -21,8 +23,8 @@ milestones.
 `make` builds `build/anchorc` with `tcc -std=c99 -Wall -Werror`.
 `make check-clang` checks every C file with
 `cc -std=c99 -Wall -Wextra -Wswitch-enum -Werror -fsyntax-only`.
-`make test` runs `test/parse.sh`, `test/evm.sh`, `test/check.sh` and
-`test/table.sh`.
+`make test` runs `test/parse.sh`, `test/evm.sh`, `test/check.sh`,
+`test/table.sh` and `test/eval.sh`.
 
 ## Layout
 
@@ -34,7 +36,8 @@ milestones.
 - `probe/CAPABILITY.md`: what the host can do now, and what is PLANNED.
 - `src/`: `anchorc`. `syntax.h` has the grammar and the front end API;
   `arena.c`, `diag.c`, `lexer.c`, `parser.c`, `printer.c` are the front end;
-  `check.c` is the checker and `check.h` its interface;
+  `check.c` is the checker, the table, the fate report and `eval`, and
+  `check.h` its interface;
   `evm.c` is the EVM assembler and the target interface; `keccak.c` is
   Keccak-256; `main.c` is the command line; `prelude.h` declares the
   embedded prelude.
@@ -53,7 +56,8 @@ milestones.
 - `test/`: `parse.sh` (round trips, parse refusals, command line exits),
   `evm.sh` (keccak vectors, assembler bytes), `check.sh` (the prelude, the
   programs, the mutants and the checker regressions), `table.sh` (the
-  table of each program, the mutants under `table`, `TABLE_LIMIT`), and the drivers
+  table of each program, the mutants under `table`, `TABLE_LIMIT`), `eval.sh` (the normal
+  form of each def, `EVAL_NAME`, the mutants under `eval`), and the drivers
   `parsetool.c` and `evmtool.c`; `parser-arms.anc` is a parser regression.
 
 ## License

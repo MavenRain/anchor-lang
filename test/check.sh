@@ -1,7 +1,7 @@
 #!/bin/sh
 # Checker tests of anchorc, run by make test after make (SPEC section 10,
-# chunk 3): the prelude, the example programs and the mutants in
-# examples/mutants. Files go to build/test. Each run stays far under 4 GB:
+# chunks 3 and 4b): the prelude, the fate report of each example program
+# and the mutants in examples/mutants. Files go to build/test. Each run stays far under 4 GB:
 # the arena of one run takes at most ANCHOR_ARENA_MAX (src/syntax.h).
 set -u
 root=$(cd "$(dirname "$0")/.." && pwd)
@@ -31,6 +31,29 @@ refuse() {
   if [ "$status" -eq 1 ] && [ "$shape" -eq 1 ]; then pass "$name"; else fail "$name: exit $status, stderr: $err"; fi
 }
 
+# accepts NAME PROG: check exits 0 and prints a fate report.
+accepts() {
+  "$anchorc" check "$2" > "$out/check.out" 2> "$out/check.err"
+  status=$?
+  case $(head -n 1 "$out/check.out") in
+    "members "*) shape=1 ;;
+    *) shape=0 ;;
+  esac
+  if [ "$status" -eq 0 ] && [ "$shape" -eq 1 ]; then pass "$1"; else fail "$1: exit $status, stderr: $(cat "$out/check.err")"; fi
+}
+
+# report_is NAME PROG: check exits 0 and stdout equals $out/want.txt.
+report_is() {
+  "$anchorc" check "$2" > "$out/check.out" 2> "$out/check.err"
+  status=$?
+  if [ "$status" -eq 0 ] && cmp -s "$out/check.out" "$out/want.txt"; then
+    pass "$1"
+  else
+    fail "$1: exit $status, stderr: $(cat "$out/check.err")"
+    diff "$out/want.txt" "$out/check.out"
+  fi
+}
+
 
 # The prelude checks: with members only, the first error is the missing
 # candidates, after the whole prelude.
@@ -40,10 +63,46 @@ refuse "the prelude checks" TYPE_SCOPE candidates "is not declared; a program de
 printf 'def candidates : Nat := 1\n' > "$out/no-members.anc"
 refuse "members is the first definition" REFUSE_MEMBERS - "" check "$out/no-members.anc"
 
-# Each program checks; the verb then exits 1 with PLANNED (chunk 4).
-for p in arrow-impossibility arrow-debreu schelling-ising; do
-  refuse "$p checks" PLANNED - "" check "$programs/$p.anc"
-done
+# Each program checks and gives its fate report (SPEC sections 6 and 7).
+cat > "$out/want.txt" <<'EOF'
+members 2
+candidates 2
+fate none 3
+tally 2 0
+tally 1 1
+tally 0 2
+fate one 0
+fate two 0
+EOF
+report_is "arrow-impossibility is none at every tally" "$programs/arrow-impossibility.anc"
+cat > "$out/want.txt" <<'EOF'
+members 3
+candidates 2
+fate none 0
+fate one 4
+tally 3 0
+tally 2 1
+tally 1 2
+tally 0 3
+fate two 0
+EOF
+report_is "arrow-debreu is one p at every tally" "$programs/arrow-debreu.anc"
+cat > "$out/want.txt" <<'EOF'
+members 2
+candidates 2
+fate none 0
+fate one 0
+fate two 3
+tally 2 0
+tally 1 1
+tally 0 2
+EOF
+report_is "schelling-ising is two p q at every tally" "$programs/schelling-ising.anc"
+
+# check tabulates, so a table that is too large is TABLE_LIMIT.
+{ printf 'def members : Nat := 4096\n'; tail -n +5 "$programs/arrow-impossibility.anc"; } > "$out/check-limit.anc"
+refuse "check of 4096 members is TABLE_LIMIT" TABLE_LIMIT candidates \
+  "4096 members and 2 candidates give more than 4096 tallies" check "$out/check-limit.anc"
 
 # SPEC section 2: a two p q side whose forkFreeze is flagNo.
 refuse "fork-unfrozen is REFUSE_FORK" REFUSE_FORK rule "is flagNo" check "$mutants/fork-unfrozen.anc"
@@ -117,7 +176,7 @@ EOF
       printf 'def rule : Tally -> Outcome := fun (t : Tally) => two (%s) (%s)\n' \
         "$left" "$right" >> "$fixture"
       if [ "$bad" = neither ]; then
-        refuse "fork $form $bad $side checks" PLANNED - "" check "$fixture"
+        accepts "fork $form $bad $side checks" "$fixture"
       else
         refuse "fork $form $bad $side refuses" REFUSE_FORK rule \
           "policyForkFreeze $side of a two p q outcome is flagNo" check "$fixture"
@@ -147,7 +206,7 @@ def matchFlag : MatchType deny := flagYes
 def candidates : Candidates := lastPolicy (mkPolicy allow nonZero blockTime 0 1 flagYes)
 def rule : Tally -> Outcome := fun (t : Tally) => none
 EOF
-refuse "erased inputs construct types" PLANNED - "" check "$out/erased-types.anc"
+accepts "erased inputs construct types" "$out/erased-types.anc"
 
 for use in direct application case match projection mismatch; do
   fixture=$out/erased-$use.anc

@@ -24,7 +24,8 @@ check() {
 }
 
 # Parse, print, parse the print and print again: the two prints are the same.
-for file in prelude/Prelude.anc test/parser-arms.anc; do
+for file in prelude/Prelude.anc test/parser-arms.anc examples/programs/arrow-impossibility.anc \
+    examples/programs/arrow-debreu.anc examples/programs/schelling-ising.anc examples/mutants/fork-unfrozen.anc; do
   name=$(basename "$file" .anc)
   "$tool" "$root/$file" > "$out/$name.1" 2> "$out/$name.err"
   first=$?
@@ -79,14 +80,14 @@ check "anchorc build without -o is usage" $? 2 "$out/usage.err" "anchorc: USAGE:
 check "anchorc check of a missing file is IO" $? 2 "$out/io.err" "anchorc: IO_READ: -: "
 "$anchorc" check "$out/bad-token.anc" > /dev/null 2> "$out/refused.err"
 check "anchorc check of a bad file is refused" $? 1 "$out/refused.err" "anchorc: LEX_TOKEN: x: "
-printf 'def members : Nat := 3\n' > "$out/program.anc"
+program=$root/examples/programs/arrow-debreu.anc
 for verb in check table abi; do
-  "$anchorc" $verb "$out/program.anc" > /dev/null 2> "$out/verb.err"
+  "$anchorc" $verb "$program" > /dev/null 2> "$out/verb.err"
   check "anchorc $verb is PLANNED" $? 1 "$out/verb.err" "anchorc: PLANNED: -: "
 done
-"$anchorc" eval "$out/program.anc" members > /dev/null 2> "$out/verb.err"
+"$anchorc" eval "$program" members > /dev/null 2> "$out/verb.err"
 check "anchorc eval is PLANNED" $? 1 "$out/verb.err" "anchorc: PLANNED: -: "
-"$anchorc" build "$out/program.anc" --runtime -o "$out/x.hex" > /dev/null 2> "$out/verb.err"
+"$anchorc" build "$program" --runtime -o "$out/x.hex" > /dev/null 2> "$out/verb.err"
 check "anchorc build is PLANNED" $? 1 "$out/verb.err" "anchorc: PLANNED: -: "
 
 if [ "$failures" -eq 0 ]; then echo "parse.sh: all passed"; exit 0; fi

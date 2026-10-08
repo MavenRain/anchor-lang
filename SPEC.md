@@ -71,10 +71,11 @@ new host column, `tcc-evm`. `formers/tcc-evm.md` does not exist yet. Chunk 3
 
 ## 4. Structures
 
-- **Monad**: `pure`, `map`, `bind` on `Option`.
-- **Algebra**: `fold` on `Nat` and on `List`. The tabulation in the
+- **Monad**: `optionPure`, `optionMap`, `optionBind` on `Option`.
+- **Algebra**: `fold` on the prelude lists `Candidates` and `Profile`, not
+  on `Nat` (prelude note P10 in section 6). The tabulation in the
   compiler visits every tally; a program does not need `unfold` (F7).
-- **Filterable**: `filter` on `List`.
+- **Filterable**: `profileFilter` on `Profile`.
 
 ## 5. Core types
 
@@ -124,6 +125,50 @@ is Arrow-Debreu, `two p q` is Schelling-Ising. The program fate report lists
 the tallies of each fate. Because `REFUSE_FORK` forces `ForkFreeze`, a
 Schelling-Ising tally admits nothing. No branch-local pair can exist, so the
 shared prefix is the log, and `verify` reads the log (O2).
+
+Prelude notes (chunk 2, `prelude/Prelude.anc`):
+
+- P1. Core names. RULED 2026-10-07 (USER): the surface has no axiom
+  form, so `Hash`, `Time`, `AnchorLog`, `logMember`
+  (`Hash -> Time -> AnchorLog -> Flag`), `logInsert`
+  (`Hash -> Time -> AnchorLog -> AnchorLog`) and `hashNonZero`
+  (`Hash -> Flag`) are core names, as `Nat`, `natAdd`, `natSub`, `natEq`
+  and `natLt` are. The prelude uses them and does not declare them. Chunk
+  3 gives them their types.
+- P2. `Flag` is `sum (prod (), prod ())`: leg 0 is `flagNo`, leg 1 is
+  `flagYes`, as for `natEq`. Design `Allow` and `Deny` are `allow` and
+  `deny`. My choice, not ruled.
+- P3. A program gives `def candidates : Candidates := ...` after
+  `members`: a list that is not empty (`consPolicy`, `lastPolicy`),
+  candidate 0 first. A ballot is the number of a candidate in it. The
+  prelude does not define `members`, `candidates` or `rule`. My choice,
+  not ruled.
+- P4. `mkPolicy` takes the fields of section 5 in their order. My
+  choice, not ruled.
+- P5. `Tally` holds one count function `Nat -> Nat`. It holds no proof
+  that the counts sum to `members`: `cast` cannot make that proof for an
+  open tally, because `Nat` has no eliminator. The compiler makes only
+  tallies whose counts at candidates 0 to K-1 sum to `members` and are 0
+  at the other numbers (chunk 4). My choice, not ruled.
+- P6. `Profile` is the list of ballots, member position 0 first.
+  `orbitProjection` counts it. `Constitution := Profile -> Outcome` is the
+  type of `F`. `Outcome` holds policies, not candidate numbers. My
+  choice, not ruled.
+- P7. The types in the table above do not show the erased `F`. The
+  prelude gives it as the first argument of `Gov`, `admit`, `anchor` and
+  `amend`. `anchor` also takes the current tally and the block time:
+  `(0 F : Constitution) -> Tally -> Time -> Hash -> AnchorDAO F -> AnchorDAO F`.
+  My choice, not ruled.
+- P8. The first argument of `cast` is the old ballot of the member, not
+  the member position, because a tally does not record who voted. The
+  runtime reads the old ballot from storage. My choice, not ruled.
+- P9. The proof in `Aggregation F` is `L (orbitProjection x) = F x`, so
+  `IsSelfConstituting` uses it with no symmetry step. `aggregationOf rule`
+  is the aggregation of a program. No name makes an empty log; the
+  contract starts with one (chunk 5). My choice, not ruled.
+- P10. There is no `fold` on `Nat`: `Nat` is a core type with no
+  eliminator, and the origin checker accepts a `def rec` only as a `match`
+  on a `mu` parameter. My choice, not ruled.
 
 ## 7. Target and instance encoding
 
@@ -222,3 +267,13 @@ placeholder (`def members : Nat := 1`) until chunk 2. Verbs `check`, `table`,
 `PLANNED`. Gate GREEN: `make` (tcc `-Wall -Werror`), `make check-clang`,
 `make test` (parse.sh 28 cases, evm.sh 5 cases: keccak vectors and the bytes
 of the contract with no entry).
+
+Status 2026-10-07: chunk 2 staged. `prelude/Prelude.anc` has the types of
+section 5, the operations of section 6 and the structures of section 4
+(prelude notes P1 to P10; P1 RULED). `examples/programs/` has one program
+for each fate: `arrow-impossibility.anc` (`none`), `arrow-debreu.anc`
+(`one p`), `schelling-ising.anc` (`two p q`, both sides frozen).
+`examples/mutants/fork-unfrozen.anc` parses; chunk 3 refuses it with
+`REFUSE_FORK`. Gate GREEN: `make`, `make check-clang`, `make test`
+(parse.sh 32 cases: 6 round trips, embedded prelude, 13 refusals, 12
+command line exits; evm.sh 5 cases).

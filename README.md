@@ -31,8 +31,14 @@ See `SPEC.md` section 10 for the milestones.
   `evm.c` is the EVM assembler and the target interface; `keccak.c` is
   Keccak-256; `main.c` is the command line; `prelude.h` declares the
   embedded prelude.
-- `prelude/Prelude.anc`: the prelude, embedded in `anchorc` at build time
-  (a placeholder until chunk 2).
+- `prelude/Prelude.anc`: the prelude (the types and operations of SPEC
+  sections 5 and 6), embedded in `anchorc` at build time.
+- `examples/programs/`: one program for each fate:
+  `arrow-impossibility.anc` (`none`), `arrow-debreu.anc` (`one p`),
+  `schelling-ising.anc` (`two p q`).
+- `examples/mutants/`: programs that parse and that the checker must
+  refuse; the first comment names the code (`fork-unfrozen.anc`:
+  `REFUSE_FORK`).
 - `tools/embed.c`: writes the prelude as C (`build/prelude.c`).
 - `test/`: `parse.sh` (round trips, parse refusals, command line exits),
   `evm.sh` (keccak vectors, assembler bytes), and their drivers

@@ -381,6 +381,67 @@ policies with the same schema runs, and a cast between `none` rows runs.
 When no `evm` is on the PATH, `test/run.sh` prints a message and exits 0
 (my choice, not ruled). `make test` runs it after `test/build.sh`.
 
+Chunk 6 (M3) adds three test files on geth `evm` and one sourced helper.
+`make test` runs them after `test/run.sh`, in the order `test/deploy.sh`,
+`test/diff.sh`, `test/laws.sh`. When no `evm` is on the PATH, each one
+prints a message and exits 0, as `test/run.sh` does.
+
+- `test/evmchain.sh` has the helpers and no cases. The three test files
+  source it. A deploy runs the creation code and the member words with
+  `evm run --create`. A step runs one call on the receiver, on the
+  storage after the last step.
+- `test/deploy.sh` (13 cases) deploys each example program. The deployed
+  code (the dump `code` and the last stdout line) must equal
+  `anchorc build --runtime`. The storage must be M at slot 0 and the M
+  member slots. The constructor guards of this section must revert on
+  `evm`: too few words, too many words, a zero address, a duplicate, a
+  word that is not an address and a non-zero value. One `anchor` call
+  must run on the deployed state.
+- `test/diff.sh` (45 cases) runs four fixed traces of calls. Each trace
+  starts from a deploy and runs one `evm run` for each call. A model in
+  awk predicts each call from the `anchorc table` text (the members, the
+  candidates, the `admit` and the `schema` of each policy, the outcome of
+  each tally) and the slot rules of this section. For each call, the
+  model predicts the result (a revert or the output word), the log (none,
+  or topic 0, `h` and `t`) and the full storage after the call. Each case
+  compares the prediction with the `evm` result, the `LOG2` lines and the
+  dump storage. Limit: the model reads the table of `anchorc`. Thus
+  `test/diff.sh` checks the contract against the table, and
+  `test/table.sh` checks the table.
+- `test/laws.sh` (23 cases) tests the laws of the log on `evm`: the log
+  only grows (monotone), a second `anchor` of the same pair changes
+  nothing (idempotent), two distinct anchors commute, no call deletes a
+  pair, `amend` is the identity on the log (O3) and there is no admit at
+  a `two` tally.
+
+The tests get keccak256 (topic 0 of `Anchored(bytes32,uint256)`, the test
+digests `h`, the pair and member slot keys and the `amend` selectors) from
+a helper contract on `evm`, `0x3660006000373660002060005260206000f3`, not
+from `src/keccak.c`. The helper copies the call data to memory, hashes it
+and returns the hash. For an empty output (for example of `cast`), `evm`
+1.14.12 prints an empty line as stdout line 1, not `0x`; the tests show
+this output as `0x`. A harness error stops the test with a `FAIL` line and
+exit 1: `evm` fails, `anchorc build` or `anchorc table` fails, or the
+keccak helper does not return 64 lowercase hex digits.
+
+Rulings of chunk 6:
+
+- a. Reference of `test/diff.sh`: the awk model above, from the
+  `anchorc table` text and the slot rules of this section. My choice, not
+  ruled.
+- b. Traces: fixed lists (no seed), four traces, one `evm run` for each
+  call. My choice, not ruled.
+- c. `amend`: M1 has no `amend` entry (O3). `test/laws.sh` shows that
+  `anchorc abi` prints no `amend` line for each example program, that the
+  selectors of `amend(uint256)` and `amend()` revert, and that the storage
+  does not change. My choice, not ruled.
+- d. Deploy test: `evm run --create`, then the compare of the deployed
+  code with `anchorc build --runtime` and of the storage with the count
+  slot and the member slots. Adopted. The constructor guard cases and the
+  `anchor` call on the deployed state are my choice, not ruled.
+- e. Files: three test files and one sourced helper, and no change to
+  `test/run.sh` (its 19 cases stay). My choice, not ruled.
+
 `anchorc table PROG` (chunk 4a) prints the table in this stable text form,
 one item on each line:
 
@@ -437,13 +498,15 @@ representation for indexers. The design model is not an event log.
   cfe211b (lexer, parser, printer, arena, diagnostics, keccak, EVM
   assembler). RULED 2026-10-07 (USER): a standalone repo now; a later port
   can return the host to lang-template as `hosts/tcc-evm`.
-- Gate tools: geth `evm` (1.14.12) runs the bytecode (`test/run.sh`);
-  Foundry `cast` gives calldata and selectors as an oracle. The build does
-  not need them. `make test` needs `evm` on the PATH to run
-  `test/run.sh`; without it, `test/run.sh` exits 0 with a message.
+- Gate tools: geth `evm` (1.14.12) runs the bytecode (`test/run.sh`,
+  `test/deploy.sh`, `test/diff.sh` and `test/laws.sh`); Foundry `cast`
+  gives calldata and selectors as an oracle. The build does not need them.
+  `make test` needs `evm` on the PATH to run these four tests; without it,
+  each one exits 0 with a message.
 - `probe/CAPABILITY.md` records what the host can do now: the TinyCC
-  build, the EVM assembler, the checker and its codes, and the PLANNED
-  work of chunk 6. The contract writer of chunk 5 is in `src/evm.c`.
+  build, the EVM assembler, the checker and its codes, and the gates.
+  Nothing is PLANNED after chunk 6. The contract writer of chunk 5 is in
+  `src/evm.c`.
 
 ## 9. Open items
 
@@ -455,9 +518,11 @@ representation for indexers. The design model is not an event log.
   log, which is then the shared prefix. The encoding of the fork as a
   `two p q` outcome at a tally is my choice and is not ruled.
 - O3. `amend`. The design forces `GovPhi canonicalAmendment L = Gov L`. M1
-  has only the canonical amendment, so there is no `amend` entry. A
-  non-canonical `Phi` (a second constitution that members switch to) needs
-  a design for who may amend and under which rule. Not ruled.
+  has only the canonical amendment, so there is no `amend` entry.
+  `test/laws.sh` tests the identity on the log: the `amend` selectors
+  revert and the storage does not change. A non-canonical `Phi` (a second
+  constitution that members switch to) needs a design for who may amend
+  and under which rule. Not ruled.
 - O4. `HashDom`. M1 has one value, `nonZero` (`h != 0`). The chain cannot
   see which function made a digest. Not ruled.
 - O5. Member addresses. Constructor arguments, one per member position, so
@@ -574,3 +639,14 @@ GREEN: `make`, `make check-clang`, `make test` (parse.sh 38 cases; evm.sh
 9 cases, with the bytes of the 5b contract and the EIP-170 edge; check.sh
 40 cases; table.sh 13 cases; eval.sh 24 cases; build.sh 33 cases, with
 the EIP-3860 edge by bisection; run.sh 19 cases), 176 cases in all.
+
+Status 2026-10-08: chunk 6 staged. Chunk 6 is M3: three test files run
+the contract on geth `evm` (section 7). `test/deploy.sh` deploys each
+example program and checks the constructor guards. `test/diff.sh` runs
+four call traces against a model of the outcome table. `test/laws.sh`
+tests the laws of the log, with `amend` as the identity (O3). The tests
+source `test/evmchain.sh`, which has no cases. There is no change to
+`src/`. Gate GREEN: `make`, `make check-clang`, `make test` (parse.sh 38
+cases; evm.sh 9 cases; check.sh 40 cases; table.sh 13 cases; eval.sh 24
+cases; build.sh 33 cases; run.sh 19 cases; deploy.sh 13 cases; diff.sh 45
+cases; laws.sh 23 cases), 257 cases in all.

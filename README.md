@@ -17,6 +17,9 @@ of each tally and `anchorc eval` prints the normal form of a def (`SPEC.md`
 sections 6 and 7). `anchorc abi` prints the entries and the log of the contract, and
 `anchorc build` writes its creation code or runtime code as hex, with the
 outcome table at the end of the runtime (chunk 5, `SPEC.md` section 7).
+The tests of chunk 6 (M3) run the contract on geth `evm`: a deploy test, a
+differential test against a model of the outcome table and the law tests
+of the log.
 See `SPEC.md` section 10 for the milestones.
 
 ## Build
@@ -25,10 +28,10 @@ See `SPEC.md` section 10 for the milestones.
 `make check-clang` checks every C file with
 `cc -std=c99 -Wall -Wextra -Wswitch-enum -Werror -fsyntax-only`.
 `make test` runs `test/parse.sh`, `test/evm.sh`, `test/check.sh`,
-`test/table.sh`, `test/eval.sh`, `test/build.sh` and `test/run.sh`.
-`test/run.sh` runs the contract on geth `evm` (1.14.12), so `make test`
-needs `evm` on the PATH to run it. Without `evm`, `test/run.sh` prints a
-message and exits 0.
+`test/table.sh`, `test/eval.sh`, `test/build.sh`, `test/run.sh`,
+`test/deploy.sh`, `test/diff.sh` and `test/laws.sh`. The last four run the
+contract on geth `evm` (1.14.12), so `make test` needs `evm` on the PATH
+to run them. Without `evm`, each of the four prints a message and exits 0.
 
 ## Layout
 
@@ -61,7 +64,11 @@ message and exits 0.
 - `test/`: `parse.sh` (round trips, parse refusals, command line exits),
   `evm.sh` (keccak vectors, the bytes of the contract, the EIP-170
   bound), `build.sh` (`abi` and `build` of each program and mutant, the
-  EIP-3860 bound), `run.sh` (the contract on geth `evm`), `check.sh` (the prelude, the
+  EIP-3860 bound), `run.sh` (the contract on geth `evm`), `deploy.sh` (the
+  deploy of each program and the constructor guards on `evm`), `diff.sh`
+  (four call traces on `evm` against a model of the table), `laws.sh` (the
+  laws of the log on `evm`), `evmchain.sh` (the helpers of these three
+  files; no cases), `check.sh` (the prelude, the
   programs, the mutants and the checker regressions), `table.sh` (the
   table of each program, the mutants under `table`, `TABLE_LIMIT`), `eval.sh` (the normal
   form of each def, `EVAL_NAME`, the mutants under `eval`), and the drivers

@@ -50,6 +50,11 @@ The compiler refuses these forms in a program, each with a stable code:
 | a definition that uses a core name or a prelude name | `REFUSE_NAME` |
 | a `two p q` outcome where `p` or `q` has `forkFreeze = flagNo` | `REFUSE_FORK` |
 
+The checker explores `case` and `match` alternatives in rule outcomes and
+their policy freeze flags. Every possible fork side must reduce to
+`flagYes`. It conservatively refuses a flag or outcome whose alternatives
+remain unresolved, using `REFUSE_FORK`.
+
 Thus a program cannot add a data type, an unproved fact or general
 recursion. Recursion comes only from `fold` (F6). The compiler writes the
 target; a program cannot.
@@ -277,3 +282,13 @@ for each fate: `arrow-impossibility.anc` (`none`), `arrow-debreu.anc`
 `REFUSE_FORK`. Gate GREEN: `make`, `make check-clang`, `make test`
 (parse.sh 32 cases: 6 round trips, embedded prelude, 13 refusals, 12
 command line exits; evm.sh 5 cases).
+
+Status 2026-10-07: chunk 3a staged. `src/check.{h,c}` is the checker of
+the origin compiler of section 8 (bidirectional, conversion by
+normalization), with the core names of prelude note P1 as opaque globals,
+the codes `REFUSE_MEMBERS`, `REFUSE_DATA`, `REFUSE_REC`, `REFUSE_NAME` and
+`REFUSE_FORK`, and the required `candidates` and `rule`. Each verb checks the
+prelude and PROG, then exits 1 with `PLANNED`. Gate GREEN: `make`,
+`make check-clang`, `make test` (`test/check.sh` includes conditional fork
+and type-erasure regressions). Chunk 3b adds the
+refusal mutants, `formers/tcc-evm.md` and `probe/CAPABILITY.md`.

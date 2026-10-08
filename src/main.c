@@ -5,8 +5,10 @@
  *   anchorc build PROG [--runtime] -o OUT the contract (chunk 5)
  *   anchorc abi PROG                      the entries of the contract (chunk 5)
  * Exit 0 ok, 1 refused, 2 usage or IO; errors go to stderr as
- * "anchorc: CODE: DEF: message". This front end parses the embedded prelude
- * and PROG, then refuses each verb with PLANNED until its back end lands. */
+ * "anchorc: CODE: DEF: message". Each verb parses the embedded prelude and
+ * PROG and checks them (src/check.h); a program that checks still exits 1
+ * with PLANNED until the back end of the verb lands. */
+#include "check.h"
 #include "prelude.h"
 #include "syntax.h"
 #include <string.h>
@@ -58,6 +60,10 @@ static int run(Arena *arena, const Verb *verb, const char *path, Diag *diag) {
     return status;
   Program program;
   status = anchor_parse(arena, path, text, size, &program, diag);
+  if (status != ANCHOR_EXIT_OK)
+    return status;
+  AnchorChecked *checked = NULL;
+  status = anchor_check(arena, &prelude, &program, &checked, diag);
   if (status != ANCHOR_EXIT_OK)
     return status;
   diag_set(diag, "PLANNED", span_of("-"), "anchorc %s has no back end yet (SPEC section 10)", verb->name);

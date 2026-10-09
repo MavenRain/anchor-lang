@@ -692,12 +692,20 @@ cases; evm.sh 9 cases; check.sh 45 cases; table.sh 15 cases; eval.sh 28
 cases; build.sh 36 cases; run.sh 19 cases; deploy.sh 13 cases; diff.sh 45
 cases; laws.sh 23 cases), 273 cases in all.
 
-Status 2026-10-08: M5 staged. Session 1 copied the compiler to lang-template
-as `hosts/tcc-evm-anchor` (lang-template 5bec924): the names `anchorc`,
-`anchor_`, `ANCHOR_` and `.anc` become `langc`, `lang_`, `LANG_` and `.lang`,
-and `prelude/Prelude.anc` becomes `domain/domain.lang`. Session 2 registers
-the kit at the lang-template root (`bin/new-lang.sh`, `Makefile`,
-`README.md`, `tests/test_tools.py`, `formers/FORMERS.md`). Gate GREEN: the
-kit `make check` (273 cases, the counts of M4), the root `make test` (27
-tests). The root `make check` stops at `hosts/mech` (no `mech` tool on
-this machine). There is no change to `src/` in this repository.
+Status 2026-10-08: M5 done. Session 1 copied the compiler to lang-template
+as `hosts/tcc-evm-anchor` (lang-template 5bec924, the kit): the names
+`anchorc`, `anchor_`, `ANCHOR_` and `.anc` become `langc`, `lang_`, `LANG_`
+and `.lang`, and `prelude/Prelude.anc` becomes `domain/domain.lang`. Session
+2 registers the kit at the lang-template root (lang-template 2a88a3a:
+`bin/new-lang.sh`, `Makefile`, `README.md`, `tests/test_tools.py`,
+`formers/FORMERS.md`). Validation: the kit `make check` passed (273 cases,
+the counts of M4), and the root `make test` passed (27 tests). The root
+`make check` exited with status 2 at `hosts/mech` (`spawnSync mech ENOENT`,
+no `mech` tool on this machine), before running the remaining host blocks.
+Those blocks were then run separately and passed: `hosts/assay`,
+`hosts/tcc-json`, `hosts/tcc-evm-contract`, `hosts/tcc-wasm`, `hosts/tcc-evm`,
+`hosts/tcc-evm-dao` and `hosts/tcc-evm-anchor` (`gate: 0 failures`). The
+`hosts/tcc-evm-contract` check included concurrent uncommitted changes in
+that kit. The shared files of `hosts/tcc-wasm` and `hosts/tcc-evm` were
+also compared separately and are the same. There is no change to `src/`
+in this repository.

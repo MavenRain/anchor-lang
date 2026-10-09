@@ -70,8 +70,8 @@ static int contract_of(AnchorChecked *checked, AnchorContract *contract) {
     rows[r].q = table.rows[r].q;
   }
   for (size_t i = 0; i < table.npolicies; i++)
-    if (anchor_policy_fields(&table, i, &policies[i].allow, &policies[i].schema) != 0) {
-      fprintf(stderr, "anchorc: TYPE_INTERNAL: -: policy %lu is not mkPolicy allow or deny with a Nat schema\n",
+    if (anchor_policy_fields(&table, i, &policies[i].allow, &policies[i].schema, &policies[i].window) != 0) {
+      fprintf(stderr, "anchorc: TYPE_INTERNAL: -: policy %lu is not mkPolicy allow or deny with a Nat window and schema\n",
               (unsigned long)i);
       return ANCHOR_EXIT_REFUSED;
     }

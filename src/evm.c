@@ -202,7 +202,7 @@ enum {
   LABEL_ANCHOR = EVM_LABEL_TARGET, LABEL_VERIFY, LABEL_CAST, LABEL_MEMBER, LABEL_BINOMIAL,
   LABEL_ROWS, LABEL_POLICIES, LABEL_RANK, LABEL_RANK_LOOP, LABEL_RANK_DONE, LABEL_ANCHOR_BACK,
   LABEL_ANCHOR_HELD, LABEL_CAST_OLD, LABEL_CAST_NEW, LABEL_CAST_OK, LABEL_AMEND, LABEL_AMEND_BACK,
-  LABEL_AMEND_OK, LABEL_AMEND_SAME
+  LABEL_AMEND_OK, LABEL_AMEND_SAME, LABEL_DISPUTE, LABEL_DISPUTE_BACK
 };
 
 typedef struct {
@@ -212,13 +212,15 @@ typedef struct {
   EvmLabel label;
 } Entry;
 
-/* The entries of SPEC section 7, in the order of the dispatch. The last,
- * amend, exists only when C > 1 (O3 b8). */
+/* The entries of SPEC section 7, in the order of the dispatch. amend
+ * exists only when C > 1 (O3 b8), and dispute only when some policy has a
+ * window > 0 (O7). */
 static const Entry ENTRIES[] = {
   {"anchor(bytes32)", "bytes32", "uint256", LABEL_ANCHOR},
   {"verify(bytes32,uint256)", "bytes32,uint256", "uint256", LABEL_VERIFY},
   {"cast(uint256)", "uint256", "-", LABEL_CAST},
-  {"amend(uint256)", "uint256", "-", LABEL_AMEND}
+  {"amend(uint256)", "uint256", "-", LABEL_AMEND},
+  {"dispute(bytes32,uint256,bytes32)", "bytes32,uint256,bytes32", "-", LABEL_DISPUTE}
 };
 
 /* The Anchored log of anchor: topic 0 is keccak256 of EVENT, topic 1 is h
@@ -229,16 +231,31 @@ static const char EVENT[] = "Anchored(bytes32,uint256)";
  * data is k. */
 static const char AMENDED[] = "Amended(uint256)";
 
-/* The entries of CONTRACT: amend only when C > 1. */
-static size_t entries_of(const AnchorContract *contract) {
-  size_t all = sizeof ENTRIES / sizeof ENTRIES[0];
-  return contract->constitutions > 1 ? all : all - 1;
+/* The Disputed log of dispute (O7): topic 0 is keccak256 of DISPUTED, topic
+ * 1 is h and the data is t and the note. */
+static const char DISPUTED[] = "Disputed(bytes32,uint256,bytes32)";
+
+/* 1 when some policy of CONTRACT has a window > 0: then the dispute entry,
+ * the window of each policy record and the Disputed log exist (O7). */
+static int disputes_of(const AnchorContract *contract) {
+  int some = 0;
+  for (size_t i = 0; contract->policies != NULL && i < contract->npolicies; i++)
+    some = some || contract->policies[i].window > 0;
+  return some;
 }
 
-/* The bytes of a policy record: admit and schema, then the amend mask when
- * C > 1. */
+/* 1 when the entry E of ENTRIES exists in CONTRACT: amend only when C > 1,
+ * dispute only when some policy has a window > 0. */
+static int entry_on(const AnchorContract *contract, size_t e) {
+  int amend_on = ENTRIES[e].label != LABEL_AMEND || contract->constitutions > 1;
+  int dispute_on = ENTRIES[e].label != LABEL_DISPUTE || disputes_of(contract);
+  return amend_on && dispute_on;
+}
+
+/* The bytes of a policy record: admit and schema, then the window when some
+ * policy has a window > 0 (O7), then the amend mask when C > 1. */
 static unsigned record_of(const AnchorContract *contract) {
-  return contract->constitutions > 1 ? 10u : 9u;
+  return 9u + (disputes_of(contract) ? 8u : 0u) + (contract->constitutions > 1 ? 1u : 0u);
 }
 
 /* word -> keccak256(word), the member slot of an address. */
@@ -288,7 +305,8 @@ static void not_one(EvmAsm *a) {
 }
 
 /* row -> the code offset of the record of its policy p (RECORD bytes:
- * admit, schema, and the amend mask when C > 1). */
+ * admit, schema, the window when some policy has a window > 0, and the
+ * amend mask when C > 1). */
 static void policy_at(EvmAsm *a, unsigned record) {
   evm_push(a, 1);
   evm_op(a, OP_ADD);
@@ -489,9 +507,9 @@ static void amend(EvmAsm *a, const AnchorContract *contract) {
   evm_revert_if(a);                  /* k, rank, old row: the fate is not one */
   evm_op(a, OP_DUP1);
   policy_at(a, record);
-  evm_push(a, 9);
+  evm_push(a, record - 1);
   evm_op(a, OP_ADD);
-  code_read(a, 1);                   /* k, rank, old row, mask */
+  code_read(a, 1);                   /* k, rank, old row, mask (the last byte of the record) */
   evm_op(a, OP_DUP4);
   evm_op(a, OP_SHR);
   evm_push(a, 1);
@@ -525,6 +543,61 @@ static void amend(EvmAsm *a, const AnchorContract *contract) {
   evm_op(a, OP_PUSH0);
   evm_op(a, OP_LOG1);                /* the data is k at 0 */
   evm_jumpdest(a, LABEL_AMEND_SAME);
+  evm_op(a, OP_STOP);
+}
+
+/* dispute(bytes32 h, uint256 t, bytes32 note) annotates the pair (h, t)
+ * with the note (O7). The guards: the caller is a member, the pair slot of
+ * (h, t) is set, the row of the current tally has the fate one, and
+ * TIMESTAMP < t + window, with the window of its policy p. Then the
+ * Disputed log is written. No slot changes, so verify does not change. */
+static void dispute(EvmAsm *a, const AnchorContract *contract) {
+  unsigned char topic[32] = {0};
+  anchor_keccak256((const unsigned char *)DISPUTED, strlen(DISPUTED), topic);
+  evm_entry(a, LABEL_DISPUTE, 3);
+  evm_op(a, OP_CALLER);
+  member_slot(a);
+  evm_op(a, OP_SLOAD);
+  evm_op(a, OP_ISZERO);
+  evm_revert_if(a);                  /* the caller is not a member */
+  evm_argument(a, 0);
+  evm_op(a, OP_PUSH0);
+  evm_op(a, OP_MSTORE);
+  evm_argument(a, 1);
+  evm_push(a, 0x20);
+  evm_op(a, OP_MSTORE);
+  evm_push(a, 0x40);
+  evm_op(a, OP_PUSH0);
+  evm_op(a, OP_SHA3);
+  evm_op(a, OP_SLOAD);
+  evm_op(a, OP_ISZERO);
+  evm_revert_if(a);                  /* the pair slot of (h, t) is 0 */
+  rank_call(a, LABEL_DISPUTE_BACK);  /* rank */
+  current_rank(a, contract);
+  row_at(a);
+  not_one(a);
+  evm_revert_if(a);                  /* row: the fate is not one */
+  policy_at(a, record_of(contract));
+  evm_push(a, 9);
+  evm_op(a, OP_ADD);
+  code_read(a, 8);                   /* window */
+  evm_argument(a, 1);
+  evm_op(a, OP_ADD);
+  evm_op(a, OP_TIMESTAMP);
+  evm_op(a, OP_LT);
+  evm_op(a, OP_ISZERO);
+  evm_revert_if(a);                  /* TIMESTAMP is not less than t + window */
+  evm_argument(a, 1);
+  evm_op(a, OP_PUSH0);
+  evm_op(a, OP_MSTORE);
+  evm_argument(a, 2);
+  evm_push(a, 0x20);
+  evm_op(a, OP_MSTORE);
+  evm_argument(a, 0);
+  evm_push_word(a, topic);
+  evm_push(a, 0x40);
+  evm_op(a, OP_PUSH0);
+  evm_op(a, OP_LOG2);                /* topic 1 is h, the data is t and the note at 0 */
   evm_op(a, OP_STOP);
 }
 
@@ -576,14 +649,17 @@ static void rank(EvmAsm *a, const AnchorContract *contract) {
 
 static void runtime(EvmAsm *a, const AnchorContract *contract) {
   evm_dispatch_head(a);
-  for (size_t e = 0; e < entries_of(contract); e++)
-    evm_dispatch(a, ENTRIES[e].signature, ENTRIES[e].label);
+  for (size_t e = 0; e < sizeof ENTRIES / sizeof ENTRIES[0]; e++)
+    if (entry_on(contract, e))
+      evm_dispatch(a, ENTRIES[e].signature, ENTRIES[e].label);
   evm_revert_block(a);  /* an unknown selector falls through to here */
   anchor(a, contract);
   verify(a);
   cast(a, contract);
   if (contract->constitutions > 1)
     amend(a, contract);
+  if (disputes_of(contract))
+    dispute(a, contract);
   rank(a, contract);  /* the outcome table comes after this */
 }
 
@@ -607,7 +683,8 @@ static void bytes_of(EvmAsm *a, unsigned long long value, unsigned n) {
  * C(S + d - 1, d). The rows: for each constitution c and each tally, 1
  * byte of fate, 2 bytes of p and 2 bytes of q (row c R + rank). The policy
  * records: for each policy, 1 byte of admit (1 allow, 0 deny), 8 bytes of
- * schema and, when C > 1, 1 byte of the amend mask. TABLE_LIMIT (4096 rows
+ * schema, 8 bytes of window when some policy has a window > 0 (O7) and,
+ * when C > 1, 1 byte of the amend mask. TABLE_LIMIT (4096 rows
  * of C R) keeps each value in its width: a policy number is less than K +
  * 2 C R, at most 12288, and a binomial entry that the runtime reads is at
  * most a row number. */
@@ -623,9 +700,12 @@ static void table(EvmAsm *a, const AnchorContract *contract) {
     bytes_of(a, contract->rows[r].q, 2);
   }
   evm_bind(a, LABEL_POLICIES);
+  int disputes = disputes_of(contract);
   for (size_t i = 0; i < contract->npolicies; i++) {
     bytes_of(a, contract->policies[i].allow != 0, 1);
     bytes_of(a, contract->policies[i].schema, 8);
+    if (disputes)
+      bytes_of(a, contract->policies[i].window, 8);
     if (contract->constitutions > 1)
       bytes_of(a, contract->amend[i], 1);
   }
@@ -749,7 +829,9 @@ int anchor_abi_write(const AnchorContract *contract, FILE *out, FILE *err) {
   if (contract == NULL)
     return fail(err, "EVM_USAGE", "no contract");
   fprintf(out, "constructor inputs address[%u]\n", contract->members);
-  for (size_t e = 0; e < entries_of(contract); e++) {
+  for (size_t e = 0; e < sizeof ENTRIES / sizeof ENTRIES[0]; e++) {
+    if (!entry_on(contract, e))
+      continue;
     unsigned char digest[32] = {0};
     anchor_keccak256((const unsigned char *)ENTRIES[e].signature, strlen(ENTRIES[e].signature), digest);
     fprintf(out, "entry %s selector %02x%02x%02x%02x inputs %s outputs %s\n", ENTRIES[e].signature,
@@ -767,6 +849,13 @@ int anchor_abi_write(const AnchorContract *contract, FILE *out, FILE *err) {
     for (size_t i = 0; i < 32; i++)
       fprintf(out, "%02x", topic[i]);
     fputs(" data uint256\n", out);
+  }
+  if (disputes_of(contract)) {
+    anchor_keccak256((const unsigned char *)DISPUTED, strlen(DISPUTED), topic);
+    fprintf(out, "event %s topic ", DISPUTED);
+    for (size_t i = 0; i < 32; i++)
+      fprintf(out, "%02x", topic[i]);
+    fputs(" indexed bytes32 data uint256,bytes32\n", out);
   }
   if (fflush(out) != 0 || ferror(out))
     return fail(err, "EVM_IO", "cannot write the entries");

@@ -69,6 +69,7 @@ anchor_in() { printf 'eecdf927%s' "$1"; }
 verify_in() { printf '382262fc%s%064x' "$1" "$2"; }
 cast_in() { printf '738198b4%064x' "$1"; }
 amend_in() { printf '13723792%064x' "$1"; }
+dispute_in() { printf '4db31205%s%064x%s' "$1" "$2" "$3"; }
 
 # program FILE: creation.hex and runtime.hex of FILE (anchorc build) and its
 # table in table.out. M and K are the member and candidate counts.
@@ -154,7 +155,7 @@ prestate() {
 # step SENDER INPUT TIME: call the receiver from SENDER with INPUT at
 # TIMESTAMP TIME, on the storage in state. got gets the line result revert
 # or result OUTPUT, then the line log TOPICS DATA for one log (all of its
-# topics in order, one for Amended and two for Anchored) or logs N for
+# topics in order, one for Amended, two for Anchored and Disputed) or logs N for
 # more, then the storage after the call. state gets that storage. The awk of the log is
 # the one of test/run.sh.
 step() {

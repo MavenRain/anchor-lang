@@ -94,10 +94,12 @@ typedef struct {
 } AnchorContractRow;
 
 /* The fields of a policy that a guard reads: hashDom and clock have one
- * value (O4, O1), forkFreeze is forced (O2) and no entry reads the window (O7). */
+ * value (O4, O1) and forkFreeze is forced (O2). Only dispute reads the
+ * window (O7). */
 typedef struct {
   int allow;                  /* 1 allow, 0 deny */
   unsigned long long schema;
+  unsigned long long window;  /* dispute(h, t, note) runs while TIMESTAMP < t + window */
 } AnchorContractPolicy;
 
 /* The anchor contract of SPEC section 7 with its outcome table. */

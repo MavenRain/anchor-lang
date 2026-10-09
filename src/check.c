@@ -1854,7 +1854,8 @@ static int policy_var(const Ast *a, const char *name) {
   return var && strcmp(a->u.name, name) == 0;
 }
 
-int anchor_policy_fields(const AnchorTable *t, size_t i, int *allow, unsigned long long *schema) {
+int anchor_policy_fields(const AnchorTable *t, size_t i, int *allow, unsigned long long *schema,
+                         unsigned long long *window) {
   const Ast *args[6] = {NULL, NULL, NULL, NULL, NULL, NULL};
   const Ast *head = i < t->npolicies ? t->policies[i] : NULL;
   size_t n = 6;
@@ -1864,9 +1865,11 @@ int anchor_policy_fields(const AnchorTable *t, size_t i, int *allow, unsigned lo
     head = head->u.app.fun;
   }
   int nat = args[4] != NULL && args[4]->kind == AST_NAT;
+  int window_nat = args[3] != NULL && args[3]->kind == AST_NAT;
   *allow = policy_var(args[0], "allow");
   *schema = nat ? args[4]->u.nat : 0;
-  int fields = nat && (*allow || policy_var(args[0], "deny"));
+  *window = window_nat ? args[3]->u.nat : 0;
+  int fields = nat && window_nat && (*allow || policy_var(args[0], "deny"));
   return n == 0 && policy_var(head, "mkPolicy") && fields ? 0 : 1;
 }
 

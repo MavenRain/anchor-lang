@@ -9,8 +9,9 @@
 # reverts when the rows before and after the ballot moves have the fate one
 # and the schema goes down (O6). amend (chunk 11) moves slot K + M to k and
 # writes the Amended log, with the guards of O3 b3 to b6, and anchor and
-# cast read the rows of the constitution in slot K + M. With no evm on the PATH, the tests are
-# skipped. Files go to build/test.
+# cast read the rows of the constitution in slot K + M. dispute (chunk 13)
+# writes the Disputed log and no slot while the block time is less than
+# t + window (O7). With no evm on the PATH, the tests are skipped. Files go to build/test.
 set -u
 root=$(cd "$(dirname "$0")/.." && pwd)
 anchorc=$root/build/anchorc
@@ -212,6 +213,47 @@ prestate "$(counts '3 0')" 0 '' "$(constitution 1)"
 reverts 'cast(1) from 3 0 to 2 1 under constitution 1 (schema 2 to 1) reverts (O6)' "$member" "$(cast_input 1)"
 prestate "$(counts '3 0')" 0
 runs 'cast(1) from 3 0 to 2 1 under constitution 0 (policy 0 at both) does not revert' "$member" "$(cast_input 1)"
+
+# dispute (O7, chunk 13). arrow-debreu-dispute.anc is arrow-debreu.anc with
+# the window 100 in openLog (policy 0) and the window 0 in closedLog
+# (policy 1). The pair slot of (h, 4660) is the one of the anchor above.
+# stamp is the block time; the tests set it back to 4660.
+disputed=$("$tool" keccak 'Disputed(bytes32,uint256,bytes32)')
+note=$("$tool" keccak 'anchor-lang run.sh note')
+dispute_input() { printf '4db31205%s%064x%s' "$h" "$1" "$note"; }
+dump() { awk '/"0x[0-9a-f]+": "/' "$out/run.out" | sort; }
+runtime "$programs/arrow-debreu-dispute.anc"
+same 'policy 0 of arrow-debreu-dispute.anc has the window 100' "$(awk '$1 == "policy" && $2 == 0 { print $7 }' "$out/table.out")" 100
+prestate "$(counts '3 0')" 0 "$pair"
+call "$member" "382262fc$h$t"
+same 'verify of (h, 4660) gives 1 before the dispute' "$(head -n 1 "$out/run.out")" "0x$(printf '%064x' 1)"
+dump > "$out/dump.before"
+runs 'dispute of (h, 4660) by a member at 4660 does not revert' "$member" "$(dispute_input 4660)"
+same 'dispute writes one log' "$(log_count)" 1
+same 'topic 0 of the log is keccak256 of Disputed(bytes32,uint256,bytes32)' \
+  "$(awk '$1 == "00000000" && NF == 2 { print $2; exit }' "$out/run.err")" "$disputed"
+same 'topic 1 of the log is h' "$(awk '$1 == "00000001" && NF == 2 { print $2; exit }' "$out/run.err")" "$h"
+same 'the data of the log is t and the note' \
+  "$(awk 'p && /\|/ { for (i = 2; i <= 17; i++) printf "%s", $i } /^LOG2:/ { p = 1 }' "$out/run.err")" "$t$note"
+dump > "$out/dump.after"
+same 'dispute changes no storage (metadata)' "$(if cmp -s "$out/dump.before" "$out/dump.after"; then echo same; else echo changed; fi)" same
+stamp=4759
+prestate "$(counts '3 0')" 0 "$pair"
+runs 'dispute of (h, 4660) at 4759 (t + window - 1) does not revert' "$member" "$(dispute_input 4660)"
+stamp=4760
+prestate "$(counts '3 0')" 0 "$pair"
+reverts 'dispute of (h, 4660) at 4760 (t + window) reverts' "$member" "$(dispute_input 4660)"
+stamp=4660
+prestate "$(counts '3 0')" 0 "$pair"
+reverts 'dispute reverts for a caller that is not a member' "$stranger" "$(dispute_input 4660)"
+reverts 'dispute of (h, 4661) reverts: the pair is not set' "$member" "$(dispute_input 4661)"
+prestate "$(counts '3 0')" 0
+reverts 'dispute of (h, 4660) reverts with no pair slot' "$member" "$(dispute_input 4660)"
+prestate "$(counts '1 2')" 1 "$pair"
+reverts 'dispute at 1 2 (policy 1, window 0) reverts' "$member" "$(dispute_input 4660)"
+runtime "$programs/arrow-debreu.anc"
+prestate "$(counts '3 0')" 0 "$pair"
+reverts 'dispute reverts on arrow-debreu.anc (no window, no dispute entry)' "$member" "$(dispute_input 4660)"
 
 if [ "$failures" -eq 0 ]; then echo "run.sh: all passed"; exit 0; fi
 echo "run.sh: $failures failed"

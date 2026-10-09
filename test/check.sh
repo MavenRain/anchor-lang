@@ -102,6 +102,7 @@ report_is "schelling-ising is two p q at every tally" "$programs/schelling-ising
 # SPEC section 10, O3: one amendment gives two constitutions, and the report
 # gives the fate blocks of each constitution.
 accepts "arrow-debreu-amend checks" "$programs/arrow-debreu-amend.anc"
+accepts "arrow-debreu-dispute checks" "$programs/arrow-debreu-dispute.anc"
 cat > "$out/want.txt" <<'EOF'
 members 3
 candidates 2

@@ -68,7 +68,7 @@ def clockAdmits : Clock -> Time -> Flag := fun (c : Clock) (t : Time) =>
   | blockTime => flagYes
 
 -- Policy: the fields admit, hashDom, clock, window, schema and forkFreeze,
--- in that order.  No entry reads window (O7).
+-- in that order.  Only `dispute` reads window (O7).
 mu Policy : Type 0 :=
   | mkPolicy (verdict : Verdict) (dom : HashDom) (clock : Clock) (window : Nat) (schema : Nat) (forkFreeze : Flag) : Policy
 
@@ -250,6 +250,28 @@ def amendKeepsGov : (0 F : Constitution) -> (L : Aggregation F) -> (t : Tally) -
 
 def amendDAO : (0 F : Constitution) -> (0 G : Constitution) -> Aggregation G -> AnchorDAO F -> AnchorDAO G :=
   fun (0 F : Constitution) (0 G : Constitution) (L : Aggregation G) (s : AnchorDAO F) => (L, s.1)
+
+-- dispute: a member annotates a recorded pair `(h, t)` with a note digest
+-- (O7).  The chain accepts the call when the pair is in the log, the
+-- outcome at the current tally is `one p`, `window p` is more than 0 and
+-- the block time is less than `t + window p`.  `Time` has no arithmetic,
+-- so the time check is on chain, as the check `hash file = h` is off
+-- chain.  A window of 0 gives no dispute.  A dispute is metadata, never
+-- removal: the state does not change, so `verify` does not change.
+def windowOpen : Policy -> Flag := fun (p : Policy) => natLt 0 (policyWindow p)
+
+def outcomeDisputes : Outcome -> Flag := fun (o : Outcome) =>
+  match o as w in Outcome return Flag with
+  | none => flagNo
+  | one p => windowOpen p
+  | two p q => flagNo
+
+def disputes : (0 F : Constitution) -> Aggregation F -> Tally -> Hash -> Time -> AnchorLog -> Flag :=
+  fun (0 F : Constitution) (L : Aggregation F) (current : Tally) (h : Hash) (t : Time) (l : AnchorLog) =>
+    flagAnd (logMember h t l) (outcomeDisputes (Gov F L current))
+
+def dispute : (0 F : Constitution) -> Tally -> Hash -> Time -> Hash -> AnchorDAO F -> AnchorDAO F :=
+  fun (0 F : Constitution) (current : Tally) (h : Hash) (t : Time) (note : Hash) (s : AnchorDAO F) => s
 
 -- IsSelfConstituting: some aggregation `L` with `Gov L` equal to `F` at
 -- each profile.  Every aggregation gives one.

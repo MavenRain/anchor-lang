@@ -1,9 +1,9 @@
 #!/bin/sh
 # Differential tests of anchorc (SPEC section 10, chunks 6 and 12), run by
-# make test after make. Five fixed traces of calls run on geth evm, each
+# make test after make. Six fixed traces of calls run on geth evm, each
 # from a deploy: one evm run for each call, on the storage after the last
 # call. A model in awk predicts each call from the anchorc table (the
-# members, the candidates, the constitutions, the admit, the schema and the
+# members, the candidates, the constitutions, the admit, the schema, the window and the
 # amendTo mask of each policy, the outcome of each tally under each
 # constitution) and the slot rules of SPEC section 7: the result (a revert
 # or the output word), the log and the full storage after the call. Each
@@ -21,6 +21,7 @@ out=$root/build/test/chain/diff
 
 topic=$(keccak "$(text 'Anchored(bytes32,uint256)')")
 amended=$(keccak "$(text 'Amended(uint256)')")
+disputed=$(keccak "$(text 'Disputed(bytes32,uint256,bytes32)')")
 h1=$(keccak "$(text 'anchor-lang diff h1')")
 h2=$(keccak "$(text 'anchor-lang diff h2')")
 h3=$(keccak "$(text 'anchor-lang diff h3')")
@@ -67,7 +68,11 @@ pairkey() {
 # is c; it reverts when k is not below C, the outcome of the current tally
 # under c is not one, bit k of the amendTo mask of its policy is 0, or the
 # tallies under c and under k are both one and the schema goes down (O6);
-# else slot K + M becomes k and the log Amended gives k. Other call data
+# else slot K + M becomes k and the log Amended gives k. dispute h t n by s
+# reverts when no policy has a window > 0, s is not a member, the pair slot
+# of (h, t) is 0, the outcome of the current tally is not one, or the time
+# is not less than t + the window of its policy; else the log Disputed gives
+# h and t . n, and the storage does not change (O7). Other call data
 # reverts.
 model_awk='
 function num(x,   n, j) {
@@ -79,11 +84,11 @@ function key(n) { return sprintf("%064x", n) }
 function get(n) { return (key(n) in st) ? num(st[key(n)]) : 0 }
 function put(n, v) { if (v == 0) delete st[key(n)]; else st[key(n)] = sprintf("%064x", v) }
 function row(   j, r) { r = ""; for (j = 0; j < K; j++) r = r " " get(j); return r }
-BEGIN { C = 1; cur = 0 }
+BEGIN { C = 1; cur = 0; hasw = 0 }
 FILENAME == tablef && $1 == "members" { M = $2 + 0 }
 FILENAME == tablef && $1 == "candidates" { K = $2 + 0 }
 FILENAME == tablef && $1 == "constitutions" { C = $2 + 0 }
-FILENAME == tablef && $1 == "policy" { admit[$2] = $4; schema[$2] = $8 + 0 }
+FILENAME == tablef && $1 == "policy" { admit[$2] = $4; schema[$2] = $8 + 0; window[$2] = $7 + 0; if ($7 + 0 > 0) hasw = 1 }
 FILENAME == tablef && $1 == "amendTo" { mask[$2] = $3 }
 FILENAME == tablef && $1 == "constitution" { cur = $2 + 0 }
 FILENAME == tablef && $1 == "tally" {
@@ -140,6 +145,13 @@ END {
         }
       }
     }
+  } else if (kind == "dispute") {
+    r = con row()
+    k = ((a " " b) in pk) ? pk[a " " b] : ""
+    if (hasw && (sender in pos) && k != "" && (k in st) && fate[r] == "one" && time + 0 < num(b) + window[pol[r]]) {
+      result = "0x"
+      logline = "log " disputed " " a " " b nt
+    }
   }
   print "result " result
   if (logline != "") print logline
@@ -147,10 +159,10 @@ END {
   close(nextf)
 }'
 
-# model KIND SENDER TIME A B: want gets the prediction of the model for one
+# model KIND SENDER TIME A B [N]: want gets the prediction of the model for one
 # call on the storage in model; model gets the storage after the call.
 model() {
-  awk -v kind="$1" -v sender="$2" -v time="$3" -v a="$4" -v b="$5" -v topic="$topic" -v amended="$amended" -v zero="$zero" \
+  awk -v kind="$1" -v sender="$2" -v time="$3" -v a="$4" -v b="$5" -v topic="$topic" -v amended="$amended" -v disputed="$disputed" -v nt="$6" -v zero="$zero" \
     -v tablef="$out/table.out" -v keysf="$out/keys" -v statef="$out/model" -v nextf="$out/model.next" \
     "$model_awk" "$out/table.out" "$out/keys" "$out/model" > "$out/want"
   sort "$out/model.next" > "$out/model"
@@ -173,12 +185,12 @@ trace() {
 }
 
 # call LABEL TIME SENDER KIND [ARG [ARG]]: one call of a trace. KIND is
-# anchor h, verify h t, cast c, amend k or raw HEX. The case passes when the model
+# anchor h, verify h t, cast c, amend k, dispute h t n or raw HEX. The case passes when the model
 # and evm give the same result, log and storage.
 call() {
   _s=$(addr "$3")
   _tw=$(printf '%064x' "$2")
-  _a='' _b=''
+  _a='' _b='' _c=''
   case $4 in
     anchor)
       _a=$(hash "$5")
@@ -194,14 +206,20 @@ call() {
     amend)
       _a=$5
       _in=$(amend_in "$5") ;;
+    dispute)
+      _a=$(hash "$5")
+      _b=$(printf '%064x' "$6")
+      _c=$(keccak "$(text "$7")")
+      _in=$(dispute_in "$_a" "$6" "$_c")
+      pairkey "$_a" "$_b" ;;
     raw)
       _in=$5 ;;
   esac
-  model "$4" "$_s" "$2" "$_a" "$_b"
+  model "$4" "$_s" "$2" "$_a" "$_b" "$_c"
   logs=$((logs + $(awk '$1 == "log" { n++ } END { print n + 0 }' "$out/want")))
   reverts=$((reverts + $(awk '$0 == "result revert" { n++ } END { print n + 0 }' "$out/want")))
   step "$_s" "$_in" "$2"
-  _name="trace $1: $4 $5${6:+ $6} by $3 at $2"
+  _name="trace $1: $4 $5${6:+ $6}${7:+ $7} by $3 at $2"
   if cmp -s "$out/want" "$out/got"; then
     pass "$_name"
   else
@@ -299,5 +317,25 @@ call 'E 16' 4666 m2 cast 1
 call 'E 17' 4666 x verify h1 4660
 call 'E 18' 4666 m0 raw 00000000
 summary E 4 8 2
+
+# Trace F: arrow-debreu-dispute (M 3, K 2). Tallies 3 0 and 2 1 are one 0
+# (allow, window 100), 1 2 and 0 3 are one 1 (deny, window 0). A dispute
+# of (h, t) returns while the time is less than t + 100 under policy 0.
+trace F "$programs/arrow-debreu-dispute.anc"
+call 'F 1' 4660 m0 anchor h1
+call 'F 2' 4660 m1 dispute h1 4660 n1
+call 'F 3' 4661 x dispute h1 4660 n1
+call 'F 4' 4661 m2 dispute h2 4660 n1
+call 'F 5' 4759 m0 dispute h1 4660 n2
+call 'F 6' 4760 m0 dispute h1 4660 n2
+call 'F 7' 4760 m1 anchor h2
+call 'F 8' 4761 m0 cast 1
+call 'F 9' 4761 m1 cast 1
+call 'F 10' 4762 m2 dispute h2 4760 n1
+call 'F 11' 4762 m0 cast 0
+call 'F 12' 4763 m2 dispute h2 4760 n3
+call 'F 13' 4763 x verify h2 4760
+call 'F 14' 4763 m0 raw 00000000
+summary F 5 5 2
 
 finish diff.sh

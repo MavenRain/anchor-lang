@@ -1,13 +1,15 @@
 #!/bin/sh
-# Law tests of anchorc (SPEC section 10, chunks 6 and 12), run by make test after
+# Law tests of anchorc (SPEC section 10, chunks 6, 12 and 13), run by make test after
 # make. Each law runs on geth evm: a deploy, then calls on the deployed
 # storage. The laws: the log only grows (monotone), a second anchor of the
 # same pair changes nothing (idempotent), two distinct anchors commute, no
 # call deletes a pair, a program with one constitution has no amend entry
 # (its selectors revert and the storage does not change), amend is the
 # identity on the pairs and the canonical amend changes nothing (O3,
-# arrow-debreu-amend.anc), and there is no admit at a tally two. With no
-# evm on the PATH, the tests are skipped.
+# arrow-debreu-amend.anc), there is no admit at a tally two, and a dispute
+# is metadata: it changes no storage and no verify, and a program with no
+# window has no dispute entry (O7, arrow-debreu-dispute.anc). With no evm
+# on the PATH, the tests are skipped.
 root=$(cd "$(dirname "$0")/.." && pwd)
 if ! command -v evm > /dev/null 2>&1; then
   echo 'laws.sh: no evm on the PATH, skipped'
@@ -219,5 +221,40 @@ step "$m1" "$(cast_in 1)" 4662
 c2=$(result)
 same 'two: after cast 1 by m1 (now 0 2), anchor by m0 and by m1 reverts and the storage stays' \
   "$c2 $(count 0) $(count 1) $(noadmit 4662)" 'result 0x 0 2 result revert result revert same'
+
+# Dispute (O7, chunk 13). The 4 programs with no window have no dispute
+# entry, so its selector reverts. On arrow-debreu-dispute.anc a dispute is
+# metadata: it writes the Disputed log, and the storage and verify do not
+# change.
+abi=$(for p in arrow-debreu arrow-impossibility schelling-ising arrow-debreu-amend; do "$anchorc" abi "$programs/$p.anc"; done)
+same 'dispute: anchorc abi of the 4 programs with no window has no dispute line' \
+  "$(printf '%s\n' "$abi" | awk '/dispute|Disputed/ { n++ } END { print n + 0 }')" 0
+_disputed=$(keccak "$(text 'Disputed(bytes32,uint256,bytes32)')") || fatal 'cannot hash Disputed(bytes32,uint256,bytes32)'
+note=$(keccak "$(text 'anchor-lang laws.sh note')") || fatal 'cannot hash the note'
+for p in arrow-debreu arrow-impossibility schelling-ising arrow-debreu-amend; do
+  program "$programs/$p.anc"
+  members "$M"
+  create "$(tr -d '\n' < "$out/creation.hex")$(words "$M")"
+  save pre
+  step "$m0" "$(dispute_in "$h1" 4660 "$note")" 4660
+  same "dispute: on $p.anc a dispute by m0 reverts and the storage is the same" "$(result) $(unchanged pre)" 'result revert same'
+done
+program "$programs/arrow-debreu-dispute.anc"
+members "$M"
+create "$(tr -d '\n' < "$out/creation.hex")$(words "$M")"
+step "$m0" "$(anchor_in "$h1")" 4660
+save pre
+step "$m1" "$(dispute_in "$h1" 4660 "$note")" 4700
+same 'dispute: a dispute of (h1, 4660) by m1 at 4700 returns, writes one log and changes no storage' \
+  "$(result) $(logcount) $(unchanged pre)" 'result 0x 1 same'
+same 'dispute: the log is Disputed with topic 1 h1 and the data 4660 and the note' \
+  "$(awk '$1 == "log" { print $2, $3, $4 }' "$out/got")" "$_disputed $h1 $(printf '%064x' 4660)$note"
+step "$stranger" "$(verify_in "$h1" 4660)" 4701
+same 'dispute: after the dispute, verify of (h1, 4660) gives 1' "$(result)" "result 0x$one"
+step "$m2" "$(dispute_in "$h1" 4660 "$note")" 4701
+step "$m0" "$(dispute_in "$h1" 4660 "$note")" 4759
+same 'dispute: two more disputes of the same pair return and change no storage' "$(result) $(unchanged pre)" 'result 0x same'
+step "$m0" "$(dispute_in "$h1" 4660 "$note")" 4760
+same 'dispute: a dispute at 4760 (t + window) reverts and the storage is the same' "$(result) $(unchanged pre)" 'result revert same'
 
 finish laws.sh

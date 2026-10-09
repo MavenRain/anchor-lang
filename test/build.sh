@@ -32,6 +32,13 @@ $(printf '%s\n' "$entries" | awk 'NR <= 3')
 entry amend(uint256) selector 13723792 inputs uint256 outputs -
 $(printf '%s\n' "$entries" | awk 'NR == 4')
 event Amended(uint256) topic 74b6d005dde213254a61708d556b168ced21c87fbb43ff65f3e33917c2ed10ea data uint256"
+# The golden text of a program with 3 members and a policy of window > 0
+# (chunk 13).
+dispute_abi="constructor inputs address[3]
+$(printf '%s\n' "$entries" | awk 'NR <= 3')
+entry dispute(bytes32,uint256,bytes32) selector 4db31205 inputs bytes32,uint256,bytes32 outputs -
+$(printf '%s\n' "$entries" | awk 'NR == 4')
+event Disputed(bytes32,uint256,bytes32) topic a2e36a14373725d927edaa22a5a9ffac5e7ed5c9e0a3fb7879ac8e740a6fd325 indexed bytes32 data uint256,bytes32"
 
 # abi_is PROG MEMBERS: exit 0 and stdout is the golden text.
 abi_is() {
@@ -74,6 +81,54 @@ for f in "$programs"/*.anc; do
   # ends with the binomial part, the C R rows and the policy records of 10
   # bytes (admit, schema, the amendTo mask).
   case $name in
+    *-dispute.anc)
+      # O7 (SPEC section 7, chunk 13): a program with a policy of window > 0
+      # has the dispute entry and the Disputed log, and its runtime ends with
+      # the binomial part, the R rows and the policy records of 17 bytes
+      # (admit, schema, window).
+      "$anchorc" table "$f" > "$out/table.out"
+      "$anchorc" abi "$f" > "$out/abi.out" 2> "$out/abi.err"
+      abi_status=$?
+      if [ "$abi_status" -eq 0 ] && [ "$(cat "$out/abi.out")" = "$dispute_abi" ]; then pass "abi of $name gives its golden text with dispute and Disputed"; else fail "abi of $name: exit $abi_status, got $(cat "$out/abi.out") $(cat "$out/abi.err")"; fi
+      got=$(awk '$2 == "dispute(bytes32,uint256,bytes32)" { print $4 }' "$out/abi.out")
+      want=$("$tool" keccak 'dispute(bytes32,uint256,bytes32)' | cut -c1-8)
+      if [ -n "$got" ] && [ "$got" = "$want" ]; then pass "selector of dispute(bytes32,uint256,bytes32) is $got"; else fail "selector of dispute(bytes32,uint256,bytes32): got $got, want $want"; fi
+      got=$(awk '$2 == "Disputed(bytes32,uint256,bytes32)" { print $4 }' "$out/abi.out")
+      want=$("$tool" keccak 'Disputed(bytes32,uint256,bytes32)')
+      if [ -n "$got" ] && [ "$got" = "$want" ]; then pass "topic of Disputed(bytes32,uint256,bytes32) is keccak256 of the signature"; else fail "topic of Disputed: got $got, want $want"; fi
+      rm -f "$out/creation.hex" "$out/runtime.hex"
+      "$anchorc" build "$f" -o "$out/creation.hex" 2> "$out/build.err"
+      first=$?
+      "$anchorc" build "$f" --runtime -o "$out/runtime.hex" 2>> "$out/build.err"
+      second=$?
+      creation=$(cat "$out/creation.hex" 2> /dev/null)
+      runtime=$(cat "$out/runtime.hex" 2> /dev/null)
+      if [ "$first" -eq 0 ] && [ "$second" -eq 0 ]; then pass "build of $name exits 0"; else fail "build of $name: exit $first and $second, stderr: $(cat "$out/build.err")"; fi
+      if [ "$(hex_ok "$creation")" -eq 1 ] && [ "$(hex_ok "$runtime")" -eq 1 ]; then pass "build of $name writes lowercase hex"; else fail "build of $name: not lowercase hex"; fi
+      held=1
+      for selector in eecdf927 382262fc 738198b4 4db31205; do
+        case $runtime in *"63$selector"*) ;; *) held=0 ;; esac
+      done
+      if [ "$held" -eq 1 ]; then pass "runtime of $name holds each selector and the dispute selector"; else fail "runtime of $name: a selector is missing"; fi
+      case $creation in
+        ?*"$runtime") pass "creation of $name ends with the runtime" ;;
+        *) fail "creation of $name does not end with the runtime" ;;
+      esac
+      tail=$(awk 'function binom(n, k,   r, i) { r = 1; for (i = 1; i <= k; i++) r = r * (n - k + i) / i; return r }
+        $1 == "members" { m = $2 } $1 == "candidates" { kc = $2 }
+        $1 == "policy" { a[$2] = $4 == "allow"; s[$2] = $8; w[$2] = $7; np = $2 + 1 }
+        $1 == "tally" { i = 1; while ($i != ":") i++; f = $(i + 1)
+          r = r sprintf("%02x%04x%04x", (f == "one") + 2 * (f == "two"), $(i + 2) + 0, $(i + 3) + 0) }
+        END { for (d = 1; d < kc; d++) for (x = 0; x <= m; x++) t = t sprintf("%04x", binom(x + d - 1, d))
+          for (p = 0; p < np; p++) q = q sprintf("%02x%016x%016x", a[p], s[p], w[p])
+          print t r q }' "$out/table.out")
+      nrows=$(awk '/^tally/ { n++ } END { print n }' "$out/table.out")
+      case $runtime in
+        ?*"$tail") pass "runtime of $name ends with the binomial part, the $nrows rows and the 17-byte policy records of its table" ;;
+        *) fail "runtime of $name: does not end with $tail" ;;
+      esac
+      continue
+      ;;
     *-amend.anc)
       "$anchorc" table "$f" > "$out/table.out"
       "$anchorc" abi "$f" > "$out/abi.out" 2> "$out/abi.err"

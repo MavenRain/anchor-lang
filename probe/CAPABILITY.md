@@ -1,6 +1,6 @@
-# anchor-lang host capability: TinyCC to EVM (M6 chunk 12, 2026-10-09)
+# anchor-lang host capability: TinyCC to EVM (M6 chunk 13, 2026-10-09)
 
-This file records what the `tcc-evm` host can do at the end of chunk 12
+This file records what the `tcc-evm` host can do at the end of chunk 13
 (SPEC section 10). The host is the C99 compiler `anchorc`, built by
 TinyCC. The target is EVM bytecode for one contract. Each fact cites a file
 or a test. PLANNED work has no evidence yet.
@@ -28,7 +28,10 @@ or a test. PLANNED work has no evidence yet.
   For a program with more than one constitution (O3, chunks 10 and 11),
   `abi` also prints the `amend` entry and the `Amended` log, and `build`
   writes the slot K + M, the C R rows and the policy records with the
-  `amendTo` mask (`test/build.sh`, `test/run.sh`).
+  `amendTo` mask (`test/build.sh`, `test/run.sh`). When some policy has
+  a `window` > 0 (O7, chunk 13), `abi` also prints the `dispute` entry
+  and the `Disputed` log, and `build` writes the 17-byte policy records
+  with the `window` (`test/build.sh`, `test/run.sh`).
 
 ## Limits
 
@@ -121,25 +124,26 @@ tabulates the rule and makes the full fork check.
 
 ## Planned
 
-M6 (SPEC section 10, chunks 9 to 14). Chunks 9 to 12 are done: chunk 9
-adds `tools/port.py` and no capability, and chunks 10 to 12 add a list of
+M6 (SPEC section 10, chunks 9 to 14). Chunks 9 to 13 are done: chunk 9
+adds `tools/port.py` and no capability, chunks 10 to 12 add a list of
 constitutions at compile time, a guarded `amend(uint256)` entry and its
-chain tests (O3, see `## Compiler` and `## Gates`). Chunk 13 adds a
-`dispute(bytes32,uint256,bytes32)` entry that writes no storage (O7).
+chain tests (O3), and chunk 13 adds a `dispute(bytes32,uint256,bytes32)`
+entry that writes no storage (O7; see `## Compiler` and `## Gates`).
 Chunk 14 ports the host again to the M5 kit, lang-template
 `hosts/tcc-evm-anchor`, with `tools/port.py`. `HashDom` stays `nonZero`
 only (O4, SPEC section 9).
 
 ## Gates (2026-10-09)
 
-All GREEN on the chunk 12 tree:
+All GREEN on the chunk 13 tree:
 
 - `make` (tcc `-Wall -Werror`).
 - `make check-clang`.
-- `make test`: `test/parse.sh` 45 cases (20 round trips), `test/evm.sh` 9
-  cases, `test/check.sh` 52 cases, `test/table.sh` 21 cases,
-  `test/eval.sh` 34 cases, including both recursive prelude defs and both
-  laws of F13, `test/build.sh` 46 cases, `test/run.sh` 40 cases, `test/deploy.sh` 17
-  cases, `test/diff.sh` 65 cases (5 traces; trace E calls `amend`) and
-  `test/laws.sh` 30 cases (with the `amend` laws of O3), the last four on
-  geth `evm` 1.14.12 (359 cases in all).
+- `make test`: `test/parse.sh` 46 cases (21 round trips), `test/evm.sh` 9
+  cases, `test/check.sh` 53 cases, `test/table.sh` 21 cases,
+  `test/eval.sh` 36 cases, including both recursive prelude defs and both
+  laws of F13, `test/build.sh` 54 cases, `test/run.sh` 55 cases,
+  `test/deploy.sh` 17 cases, `test/diff.sh` 81 cases (6 traces; trace E
+  calls `amend` and trace F calls `dispute`) and `test/laws.sh` 40 cases
+  (with the `amend` laws of O3 and the `dispute` laws of O7), the last
+  four on geth `evm` 1.14.12 (412 cases in all).

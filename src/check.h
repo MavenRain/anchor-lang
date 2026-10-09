@@ -62,11 +62,13 @@ typedef struct {
  * MEMORY. The table lives in the arena of CHECKED. */
 int anchor_table(AnchorChecked *checked, AnchorTable *table);
 
-/* The two fields of policy I of T that the contract reads (anchorc build
- * and abi): *ALLOW is 1 for allow and 0 for deny, *SCHEMA is the schema.
- * Policy I must be the normal form mkPolicy v d c window schema forkFreeze
- * with v allow or deny and schema a Nat. Returns 0, else nonzero. */
-int anchor_policy_fields(const AnchorTable *t, size_t i, int *allow, unsigned long long *schema);
+/* The three fields of policy I of T that the contract reads (anchorc build
+ * and abi): *ALLOW is 1 for allow and 0 for deny, *SCHEMA is the schema and
+ * *WINDOW is the window (O7). Policy I must be the normal form mkPolicy v d
+ * c window schema forkFreeze with v allow or deny, and window and schema
+ * Nats. Returns 0, else nonzero. */
+int anchor_policy_fields(const AnchorTable *t, size_t i, int *allow, unsigned long long *schema,
+                         unsigned long long *window);
 
 /* The stable text form of SPEC section 7. */
 void anchor_print_table(FILE *out, const AnchorTable *table);

@@ -178,6 +178,7 @@ from outside. A program cannot make either one.
 | `verify` | `Hash -> Time -> AnchorLog -> Flag` | `(h, t)` is in the log (5); `hash file = h` is checked off chain |
 | `cast` | `Nat -> Ballot -> Tally -> Tally` | a member changes a ballot; the log does not change (5) |
 | `amend` | `Aggregation F -> Aggregation F` | `GovPhi Phi`; M1 has only `canonicalAmendment`, the identity (4, O3) |
+| `dispute` | `Hash -> Time -> Hash -> AnchorDAO -> AnchorDAO` | a member annotates a pair `(h, t)` of the log with a note digest; the identity, so the log does not change (O7, chunk 13) |
 | `IsSelfConstituting` | `Type` | `exists L, forall X, (Gov L).obj X = F.obj X` (4); the tally set is finite, so the compiler checks it at each tally |
 
 There is no operation whose meaning is a proper subset of the log. There is
@@ -247,6 +248,7 @@ of `anchor`.
 | `anchor(bytes32)` returns `uint256` | caller is a member; `h != 0`; `admit` gives `flagYes` at the current tally (the outcome is `one p` and `p.admit` is `allow`) | when the pair slot of `(h, t)` with `t = TIMESTAMP` is 0, sets it to 1 and logs `Anchored(bytes32,uint256)`; returns `t` |
 | `verify(bytes32,uint256)` returns `uint256` | none | returns 1 if the slot of `keccak256(h, t)` is set, else 0 |
 | `cast(uint256)` | caller is a member; ballot less than the number of candidates; O6 when the outcomes before and after the move are both `one` (below) | changes the ballot and the tally counts |
+| `dispute(bytes32,uint256,bytes32)`, only when some policy has `window` > 0 (O7, chunk 13) | caller is a member; the pair slot of `(h, t)` is set; the outcome at the current tally is `one p`; `TIMESTAMP < t + window`, with the `window` of `p` | logs `Disputed(bytes32,uint256,bytes32)`; writes no storage, so `verify` does not change |
 
 Storage holds the member addresses, the ballots, the tally counts and the
 pair slots. Nothing else. The slot numbers (chunk 5a) are my choice, not
@@ -349,9 +351,13 @@ choice, not ruled:
   bytes: the fate (1 byte: 0 `none`, 1 `one`, 2 `two`), then `p` and `q`
   (2 bytes each, 0 when not used).
 - Policy records: one record for each policy number, 9 bytes: `admit` (1
-  byte: 1 `allow`, 0 `deny`), then `schema` (8 bytes). The guards read
-  only these two fields: `hashDom` and `clock` have one value (O4, O1),
-  `forkFreeze` is forced (O2), and no entry reads `window` (O7).
+  byte: 1 `allow`, 0 `deny`), then `schema` (8 bytes). When some policy
+  has `window` > 0 (O7, chunk 13), each record has 17 bytes: bytes 9 to
+  16 hold `window`. When C > 1 (O3, chunk 11), the last byte of each
+  record is the `amendTo` mask, so a record has 10 bytes, or 18 bytes
+  with a window. The guards read only these fields: `hashDom` and
+  `clock` have one value (O4, O1), `forkFreeze` is forced (O2), and only
+  `dispute` reads `window` (O7).
 - The widths are sufficient because `TABLE_LIMIT` is 4096. There are at
   most K + 2 x rows <= 12288 policies, less than 65536. Each term that
   the runtime reads is at most the rank, which is less than 4096. `Nat`
@@ -565,6 +571,73 @@ so that the O6 guard of `amend` refuses one call. My choice, not ruled: in
 the chain tests, the line of a log with one topic is `log TOPIC0 DATA`.
 The chain reader preserves all topics, so an extra topic fails the
 differential comparison. `test/deploy.sh` has a LOG3 regression case.
+
+Chunk 13 gives the `dispute` entry of O7 (row 13). The prelude has
+`windowOpen : Policy -> Flag` (`flagYes` when `window` > 0),
+`outcomeDisputes : Outcome -> Flag` (`one p` gives `windowOpen p`; `none`
+and `two p q` give `flagNo`), `disputes F L current h t l` (`logMember h
+t l` and `outcomeDisputes` at the current tally) and `dispute : (0 F :
+Constitution) -> Tally -> Hash -> Time -> Hash -> AnchorDAO F ->
+AnchorDAO F`, the identity (O7). When some policy has `window` > 0, the
+contract has the entry `dispute(bytes32 h, uint256 t, bytes32 note)`
+(the entry table above) and each policy record has 17 bytes. `dispute`
+reverts when the caller is not a member, when the pair slot of `(h, t)`
+is 0, when the row of the current tally does not have the fate one, and
+when `TIMESTAMP` is not less than `t + window`, with `window` from the
+policy `p` of that row (O7). Else it logs `Disputed` and stops. It
+writes no slot (O7), so `verify` does not change and a second dispute of
+the same pair logs again. `t + window` cannot wrap: only `anchor` sets a
+pair slot, at `t = TIMESTAMP`, and `window` has 8 bytes. `anchorc abi`
+prints the dispute entry last and the `Disputed` line after the
+`Anchored` line, and after the `Amended` line when C > 1:
+
+    entry dispute(bytes32,uint256,bytes32) selector 4db31205 inputs bytes32,uint256,bytes32 outputs -
+    event Disputed(bytes32,uint256,bytes32) topic a2e36a14373725d927edaa22a5a9ffac5e7ed5c9e0a3fb7879ac8e740a6fd325 indexed bytes32 data uint256,bytes32
+
+When no policy has `window` > 0, the entry, the window bytes and the log
+do not exist, so the bytes do not change (D0).
+`examples/programs/arrow-debreu-dispute.anc` is `arrow-debreu.anc` with
+the window 100 in `openLog`. `anchorc eval` gives `flagYes` for
+`openDisputes` and `flagNo` for `closedDisputes`. The runtime has 807
+bytes and the creation code has 906 bytes. The runtime ends with the
+binomial part, the rows and the 17-byte records. For `arrow-debreu.anc`,
+`arrow-impossibility.anc`, `schelling-ising.anc` and
+`arrow-debreu-amend.anc`, `table`, `check`, `abi`, `build` and `build
+--runtime` give the same bytes as the binary of the parent commit (20
+compares, 0 differences). Thus `arrow-debreu.anc` keeps 595 and 694
+bytes, and `arrow-debreu-amend.anc` keeps 952 and 1051 bytes.
+
+My choice, not ruled: the log is `LOG2`; topic 0 is
+`keccak256("Disputed(bytes32,uint256,bytes32)")`, topic 1 is `h`, and
+the data is `t . note`, two 32-byte words. My choice, not ruled:
+`dispute` is the last entry of the dispatch and of `anchorc abi`, after
+`amend` when C > 1. Its code comes after the other entries and before
+the rank subroutine, and it tests the member and the pair slot before it
+calls the rank subroutine. My choice, not ruled: `Time` is opaque and
+has no arithmetic (section 5), so the prelude does not compare times.
+The test `TIMESTAMP < t + window` is a chain check, as `hash file = h`
+is an off chain check (section 6). Thus `windowOpen` reads only `window`
+> 0 (a window of 0 gives no dispute), and the prelude `dispute` takes no
+block time. My choice, not ruled: when C > 1, `window` comes from the
+policy of the current tally under the current constitution (slot K +
+M), as for `anchor`.
+
+The tests of chunk 13: `test/build.sh` checks the abi, the selector, the
+topic, the bytes and the 17-byte record tail of `*-dispute.anc`.
+`test/run.sh` runs `dispute` on prestates with the window 100 and the
+pair at t = 4660: a dispute at 4660 logs `Disputed`, a dispute at 4759
+runs, and a dispute at 4760 (t + window) reverts. A stranger, a pair
+that is not set and a tally whose policy has the window 0 revert.
+`test/laws.sh` deploys the 4 programs with the window 0, where `dispute`
+reverts and the storage stays the same, and `arrow-debreu-dispute.anc`,
+where `dispute` logs one `Disputed` and changes no slot, `verify` gives
+1 after it, and a dispute at t + window reverts. The awk model of
+`test/diff.sh` reads `window`, and trace F on `arrow-debreu-dispute.anc`
+has 14 calls (5 logs, 5 reverts, 2 pairs). `test/evmchain.sh` has
+`dispute_in H T NOTE`. My choice, not ruled: the awk model reads
+`window` as field 7 of each policy line of `anchorc table`. My choice,
+not ruled: in trace F, the note of `dispute h t n` is `keccak256` of the
+text `n`, because the hash names of the traces are only h1 to h4 and 0.
 
 `anchorc eval PROG NAME` (chunk 4b) prints the normal form of the def NAME
 of the prelude or PROG, including a prelude `def rec`, in the canonical
@@ -931,3 +1004,16 @@ the 3 programs of M5 do not change. Gate GREEN: `make`, `make check-clang`,
 34, build 46, run 40, deploy 17, diff 65, laws 30; plus 13 port-script
 regressions). `--check` on the lang-template kit exits 1 and lists only the
 chunk 10 to 12 paths.
+
+Status 2026-10-09: chunk 13 staged. O7 (section 7): the prelude has
+`windowOpen`, `outcomeDisputes`, `disputes` and `dispute`, and
+`src/evm.c` writes the `dispute` entry, the 17-byte policy records and
+the `Disputed` log when some policy has `window` > 0. The new program is
+`examples/programs/arrow-debreu-dispute.anc`. For the 3 programs of M5
+and `arrow-debreu-amend.anc`, `table`, `check`, `abi`, `build` and
+`build --runtime` give the same bytes as the binary of the parent commit
+(D0, 20 compares). Gate GREEN: `make`, `make check-clang`, `make test`
+(412 compiler cases: parse 46, evm 9, check 53, table 21, eval 36,
+build 54, run 55, deploy 17, diff 81, laws 40; plus 13 port-script
+regressions). `--check` on the lang-template kit exits 1 and lists only
+the chunk 10 to 13 paths.

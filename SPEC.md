@@ -515,10 +515,39 @@ has C digits, k = 0 first, and digit k is 1 when `amendTo p k` is
 `flagYes`. Then, for each constitution k, it prints `constitution k` and
 the tally rows of that constitution. `anchorc check` prints `members M`,
 `candidates K` and `constitutions C`. Then, for each constitution k, it
-prints `constitution k` and the fate blocks of that constitution. Until
-chunk 11, `anchorc abi` and `anchorc build` of such a program exit 1 with
-`PLANNED` ("anchorc abi has no back end yet for more than one constitution
-(SPEC section 10)") and write no file. My choice, not ruled.
+prints `constitution k` and the fate blocks of that constitution.
+
+Chunk 11 gives such a program a contract (O3 b4 to b8). Slot K + M holds
+the current constitution c. The zero word is constitution 0, so the
+constructor writes no new slot. The code table has C R rows: the row of a
+tally under c is c R + rank, at the offset of the rows plus 5 (c R +
+rank). Each policy record has 10 bytes: admit, schema and the `amendTo`
+mask (bit k is 1 when `amendTo p k` is `flagYes`). `anchor` and `cast`
+read the row under c. The entry `amend(uint256 k)` makes k the current
+constitution. Its guards: the caller is a member, k is less than C, the
+row of the current tally under c has the fate one, and bit k of the mask
+of its policy is 1. When the row under k has the fate one too, its schema
+is not less than the schema of the row under c (O6, b6). Then slot K + M
+becomes k and the log `Amended(uint256)` gives k as its data (b7).
+`anchorc abi` prints the amend entry last and, after the `Anchored` line,
+`event Amended(uint256) topic T data uint256`. When C = 1, the entry, the
+slot, the mask and the log do not exist, so the bytes do not change (b8,
+D0). `EVM_LIMIT` (EIP-170) bounds the bytes. For
+`arrow-debreu-amend.anc`, the runtime has 952 bytes and the creation code
+has 1051 bytes.
+
+My choice, not ruled: when k is the current constitution, `amend` stops
+after the member check, before the other guards, with no slot write and
+no log (the b3 reading). My choice, not ruled: k >= C reverts. My choice,
+not ruled: the data of `Amended` is k and k is not indexed, so the abi
+line has no `indexed` part. My choice, not ruled: `amend` is the last
+entry of the dispatch. My choice, not ruled: the mask is byte 9 of the
+10-byte record. My choice, not ruled: the writer refuses C outside 1 to 8
+with `EVM_LIMIT`, a second guard after `AMEND_LIMIT`. My choice, not
+ruled: the contract does not copy the masks, because the arena of the
+checked program owns them. My choice, not ruled: the amend cases are in
+`test/run.sh` on prestates (a prestate with slot K + M = 1 is the storage
+after `amend(1)`), and `test/diff.sh` and `test/laws.sh` keep their cases.
 
 `anchorc eval PROG NAME` (chunk 4b) prints the normal form of the def NAME
 of the prelude or PROG, including a prelude `def rec`, in the canonical
@@ -861,3 +890,15 @@ compiler cases: parse 45, evm 9, check 52, table 21, eval 34, build 43, run
 `--check` on the lang-template kit exits 1 and lists only the chunk 10
 paths. Open: a constitution k >= 1 tabulates only while the evaluation of
 its profile stays under `CHECK_DEPTH` (section 7).
+
+Status 2026-10-09: chunk 11 staged. `src/evm.c` writes the contract of a
+program with more than one constitution (section 7): the slot K + M, the
+C R rows, the policy records with the `amendTo` mask, the `amend` entry
+with the O6 guard and the `Amended` log. `src/main.c` gives the masks to
+the writer and no longer gives `PLANNED`. For the 3 programs of M5,
+`table`, `check`, `abi`, `build` and `build --runtime` give the same bytes
+as the binary of the parent commit. Gate GREEN: `make`, `make
+check-clang`, `make test` (328 compiler cases: parse 45, evm 9, check 52,
+table 21, eval 34, build 46, run 40, deploy 13, diff 45, laws 23; plus 13
+port-script regressions). `--check` on the lang-template kit exits 1 and
+lists only the chunk 10 and 11 paths.

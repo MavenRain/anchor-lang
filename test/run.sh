@@ -7,7 +7,9 @@
 # pair slot and writes the Anchored log once for each pair. It reverts at
 # each other row, for a caller that is not a member and for h = 0. cast
 # reverts when the rows before and after the ballot moves have the fate one
-# and the schema goes down (O6). With no evm on the PATH, the tests are
+# and the schema goes down (O6). amend (chunk 11) moves slot K + M to k and
+# writes the Amended log, with the guards of O3 b3 to b6, and anchor and
+# cast read the rows of the constitution in slot K + M. With no evm on the PATH, the tests are
 # skipped. Files go to build/test.
 set -u
 root=$(cd "$(dirname "$0")/.." && pwd)
@@ -66,14 +68,16 @@ counts() {
   awk -v want="tally $1 :" 'index($0, want) == 1 { $1 = ""; print substr($0, 2); exit }' "$out/table.out"
 }
 
-# prestate TALLY BALLOT [PAIR]: $out/prestate.json holds the runtime of
-# $out/code.hex at the receiver, the counts of TALLY, the member slot of
-# member position 0, its ballot BALLOT at slot K and the pair slot PAIR.
+# prestate TALLY BALLOT [PAIR [WORD]]: $out/prestate.json holds the runtime
+# of $out/code.hex at the receiver, the counts of TALLY, the member slot of
+# member position 0, its ballot BALLOT at slot K, the pair slot PAIR and
+# the storage entry WORD ("slot":"value").
 prestate() {
-  storage=$(printf '%s\n' "$1" | awk -v m="$member_slot" -v b="$2" -v pair="${3:-}" '{
+  storage=$(printf '%s\n' "$1" | awk -v m="$member_slot" -v b="$2" -v pair="${3:-}" -v word="${4:-}" '{
     for (c = 1; $c != ":"; c++) printf "\"0x%064x\":\"0x%064x\",", c - 1, $c
     printf "\"0x%064x\":\"0x%064x\",\"0x%s\":\"0x0000000000000000000000000000000000000000000000000000000000000001\"", c - 1, b, m
     if (pair != "") printf ",\"0x%s\":\"0x0000000000000000000000000000000000000000000000000000000000000001\"", pair
+    if (word != "") printf ",%s", word
   }')
   printf '{"config":{"chainId":1,"homesteadBlock":0,"eip150Block":0,"eip155Block":0,"eip158Block":0,"byzantiumBlock":0,"constantinopleBlock":0,"petersburgBlock":0,"istanbulBlock":0,"berlinBlock":0,"londonBlock":0,"mergeNetsplitBlock":0,"shanghaiTime":0,"cancunTime":0,"terminalTotalDifficulty":0,"terminalTotalDifficultyPassed":true},"timestamp":"0x%x","gasLimit":"0x1c9c380","difficulty":"0x0","alloc":{"0x%s":{"balance":"0x0","code":"0x%s","storage":{%s}}}}\n' \
     "$stamp" "$receiver" "$(tr -d '\n' < "$out/code.hex")" "$storage" > "$out/prestate.json"
@@ -158,6 +162,56 @@ runs 'cast between two rows one of schema 1 does not revert' "$member" "$(cast_i
 runtime "$programs/arrow-impossibility.anc"
 prestate "$(counts '1 1')" 1
 runs 'cast between two rows none does not revert' "$member" "$(cast_input 0)"
+
+# amend (O3, chunk 11). arrow-debreu-amend.anc has K = 2 and M = 3, so slot
+# 5 holds the constitution. Policy 0 (allow) has the mask 11 and policy 1
+# (deny) the mask 10 (bit k from the left). Constitution 0 gives 2 1 the
+# policy 0 and constitution 1 gives it the policy 1; 3 0 has the policy 0
+# and 1 2 the policy 1 under both. A prestate with slot 5 = 1 is the
+# storage after amend(1).
+amend_input() { printf '13723792%064x' "$1"; }
+constitution() { printf '"0x%064x":"0x%064x"' 5 "$1"; }
+slot5() { awk -v s="\"0x$(printf '%064x' 5)\":" '$1 == s { v = $2; gsub(/[",]/, "", v); print v }' "$out/run.out"; }
+amended=$("$tool" keccak 'Amended(uint256)')
+runtime "$programs/arrow-debreu-amend.anc"
+prestate "$(counts '3 0')" 0
+runs 'amend(1) at 3 0 under constitution 0 does not revert' "$member" "$(amend_input 1)"
+same 'amend(1) sets slot K + M to 1' "$(slot5)" 01
+same 'amend(1) writes one log' "$(log_count)" 1
+same 'topic 0 of the log is keccak256 of Amended(uint256)' \
+  "$(awk '$1 == "00000000" && NF == 2 { print $2; exit }' "$out/run.err")" "$amended"
+same 'the data of the log is k' \
+  "$(awk 'p && /\|/ { for (i = 2; i <= 17; i++) printf "%s", $i } /^LOG1:/ { p = 1 }' "$out/run.err")" "$(printf '%064x' 1)"
+reverts 'amend(1) reverts for a caller that is not a member' "$stranger" "$(amend_input 1)"
+reverts 'amend(2) reverts (k > C - 1)' "$member" "$(amend_input 2)"
+reverts 'amend(2^256 - 1) reverts (k > C - 1)' "$member" "13723792$(awk 'BEGIN { while (n++ < 64) printf "f" }')"
+runs 'amend(0) under constitution 0 does not revert' "$member" "$(amend_input 0)"
+same 'amend(0) under constitution 0 writes no slot K + M and no log (b3)' "[$(slot5)] $(log_count)" '[] 0'
+prestate "$(counts '1 2')" 1
+reverts 'amend(1) at 1 2 reverts: amendTo 1 1 is no' "$member" "$(amend_input 1)"
+prestate "$(counts '2 1')" 1 '' "$(constitution 1)"
+runs 'amend(1) at 2 1 under constitution 1 (policy 1, amendTo 1 1 is no) does not revert (b3)' "$member" "$(amend_input 1)"
+same 'amend(1) under constitution 1 keeps slot K + M at 1 and writes no log' "[$(slot5)] $(log_count)" '[01] 0'
+reverts 'anchor at 2 1 under constitution 1 (policy 1, deny) reverts' "$member" "$anchor_input"
+prestate "$(counts '2 1')" 1
+call "$member" "$anchor_input"
+same 'anchor at 2 1 under constitution 0 (policy 0, allow) returns TIMESTAMP' "$(head -n 1 "$out/run.out")" "0x$t"
+
+# O6 for amend and cast under constitution 1. amend-schema-2.anc is
+# arrow-debreu-amend.anc with the schema 2 in openLog (policy 0).
+awk '/^def openLog/ { sub(/ 0 1 flagYes/, " 0 2 flagYes") } { print }' \
+  "$programs/arrow-debreu-amend.anc" > "$out/amend-schema-2.anc"
+runtime "$out/amend-schema-2.anc"
+same 'policy 0 of amend-schema-2.anc has the schema 2' "$(awk '$1 == "policy" && $2 == 0 { print $8 }' "$out/table.out")" 2
+prestate "$(counts '2 1')" 1
+reverts 'amend(1) at 2 1 from policy 0 (schema 2) to policy 1 (schema 1) reverts (O6)' "$member" "$(amend_input 1)"
+prestate "$(counts '2 1')" 1 '' "$(constitution 1)"
+runs 'amend(0) at 2 1 from policy 1 (schema 1) to policy 0 (schema 2) does not revert' "$member" "$(amend_input 0)"
+same 'amend(0) clears slot K + M and writes one log' "[$(slot5)] $(log_count)" '[] 1'
+prestate "$(counts '3 0')" 0 '' "$(constitution 1)"
+reverts 'cast(1) from 3 0 to 2 1 under constitution 1 (schema 2 to 1) reverts (O6)' "$member" "$(cast_input 1)"
+prestate "$(counts '3 0')" 0
+runs 'cast(1) from 3 0 to 2 1 under constitution 0 (policy 0 at both) does not revert' "$member" "$(cast_input 1)"
 
 if [ "$failures" -eq 0 ]; then echo "run.sh: all passed"; exit 0; fi
 echo "run.sh: $failures failed"

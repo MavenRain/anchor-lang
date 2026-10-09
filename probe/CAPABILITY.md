@@ -1,6 +1,6 @@
-# anchor-lang host capability: TinyCC to EVM (M6 chunk 10, 2026-10-08)
+# anchor-lang host capability: TinyCC to EVM (M6 chunk 11, 2026-10-09)
 
-This file records what the `tcc-evm` host can do at the end of chunk 10
+This file records what the `tcc-evm` host can do at the end of chunk 11
 (SPEC section 10). The host is the C99 compiler `anchorc`, built by
 TinyCC. The target is EVM bytecode for one contract. Each fact cites a file
 or a test. PLANNED work has no evidence yet.
@@ -25,9 +25,10 @@ or a test. PLANNED work has no evidence yet.
   `abi` prints the entries and the `Anchored` log, and `build` writes
   the hex of the contract with the outcome table (chunk 5, SPEC section
   7). Both tabulate one time; a table refusal stops them with its code.
-  For a program with more than one constitution (O3, chunk 10), both exit
-  1 with `PLANNED` and write no file (`test/build.sh`). The contract
-  writer for it is chunk 11.
+  For a program with more than one constitution (O3, chunks 10 and 11),
+  `abi` also prints the `amend` entry and the `Amended` log, and `build`
+  writes the slot K + M, the C R rows and the policy records with the
+  `amendTo` mask (`test/build.sh`, `test/run.sh`).
 
 ## Limits
 
@@ -128,15 +129,15 @@ Chunk 14 ports the host again to the M5 kit, lang-template
 `hosts/tcc-evm-anchor`, with `tools/port.py`. `HashDom` stays `nonZero`
 only (O4, SPEC section 9).
 
-## Gates (2026-10-08)
+## Gates (2026-10-09)
 
-All GREEN on the chunk 10 tree:
+All GREEN on the chunk 11 tree:
 
 - `make` (tcc `-Wall -Werror`).
 - `make check-clang`.
 - `make test`: `test/parse.sh` 45 cases (20 round trips), `test/evm.sh` 9
   cases, `test/check.sh` 52 cases, `test/table.sh` 21 cases,
   `test/eval.sh` 34 cases, including both recursive prelude defs and both
-  laws of F13, `test/build.sh` 43 cases, `test/run.sh` 19 cases, `test/deploy.sh` 13
+  laws of F13, `test/build.sh` 46 cases, `test/run.sh` 40 cases, `test/deploy.sh` 13
   cases, `test/diff.sh` 45 cases and `test/laws.sh` 23 cases, the last
-  four on geth `evm` 1.14.12 (304 cases in all).
+  four on geth `evm` 1.14.12 (328 cases in all).

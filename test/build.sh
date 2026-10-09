@@ -4,7 +4,9 @@
 # selector is the first 4 bytes of keccak256 of its signature, build writes
 # lowercase hex, the runtime holds each selector, the creation code ends
 # with the runtime code, the runtime ends with the rows and the policy
-# records of anchorc table, each mutant keeps its code under abi and build,
+# records of anchorc table, a program with more than one constitution has
+# the amend entry, the Amended log and C R rows and masked policy records
+# (chunk 11), each mutant keeps its code under abi and build,
 # and EIP-3860 bounds the creation code and the member words. A bytecode write failure exits 2 and removes the
 # incomplete output. Files go to build/test.
 set -u
@@ -24,6 +26,12 @@ entries='entry anchor(bytes32) selector eecdf927 inputs bytes32 outputs uint256
 entry verify(bytes32,uint256) selector 382262fc inputs bytes32,uint256 outputs uint256
 entry cast(uint256) selector 738198b4 inputs uint256 outputs -
 event Anchored(bytes32,uint256) topic fde54488b5523b3abf19b99976dd0e2c531fbcd233d0eb682c96c3a18cf6b3c1 indexed bytes32 data uint256'
+# The golden text of a program with 3 members and 2 constitutions (chunk 11).
+amend_abi="constructor inputs address[3]
+$(printf '%s\n' "$entries" | awk 'NR <= 3')
+entry amend(uint256) selector 13723792 inputs uint256 outputs -
+$(printf '%s\n' "$entries" | awk 'NR == 4')
+event Amended(uint256) topic 74b6d005dde213254a61708d556b168ced21c87fbb43ff65f3e33917c2ed10ea data uint256"
 
 # abi_is PROG MEMBERS: exit 0 and stdout is the golden text.
 abi_is() {
@@ -61,36 +69,50 @@ hex_ok() {
 
 for f in "$programs"/*.anc; do
   name=$(basename "$f")
-  # SPEC section 10, O3: a program with more than one constitution has no
-  # back end yet, so abi and build exit 1 with PLANNED and write no file.
+  # O3 (SPEC section 7, chunk 11): a program with more than one
+  # constitution has the amend entry and the Amended log, and its runtime
+  # ends with the binomial part, the C R rows and the policy records of 10
+  # bytes (admit, schema, the amendTo mask).
   case $name in
     *-amend.anc)
-      rm -f "$out/creation.hex" "$out/runtime.hex"
+      "$anchorc" table "$f" > "$out/table.out"
       "$anchorc" abi "$f" > "$out/abi.out" 2> "$out/abi.err"
       abi_status=$?
+      if [ "$abi_status" -eq 0 ] && [ "$(cat "$out/abi.out")" = "$amend_abi" ]; then pass "abi of $name gives its golden text with amend and Amended"; else fail "abi of $name: exit $abi_status, got $(cat "$out/abi.out") $(cat "$out/abi.err")"; fi
+      rm -f "$out/creation.hex" "$out/runtime.hex"
       "$anchorc" build "$f" -o "$out/creation.hex" 2> "$out/build.err"
       first=$?
-      "$anchorc" build "$f" --runtime -o "$out/runtime.hex" 2> "$out/runtime.err"
+      "$anchorc" build "$f" --runtime -o "$out/runtime.hex" 2>> "$out/build.err"
       second=$?
-      planned='has no back end yet for more than one constitution (SPEC section 10)'
-      if [ "$abi_status" -eq 1 ] && [ ! -s "$out/abi.out" ] &&
-        [ "$(cat "$out/abi.err")" = "anchorc: PLANNED: -: anchorc abi $planned" ]; then
-        pass "abi of $name is PLANNED"
-      else
-        fail "abi of $name: exit $abi_status, stderr: $(cat "$out/abi.err")"
-      fi
-      if [ "$first" -eq 1 ] && [ ! -e "$out/creation.hex" ] &&
-        [ "$(cat "$out/build.err")" = "anchorc: PLANNED: -: anchorc build $planned" ]; then
-        pass "build of $name is PLANNED and writes no file"
-      else
-        fail "build of $name: exit $first, stderr: $(cat "$out/build.err")"
-      fi
-      if [ "$second" -eq 1 ] && [ ! -e "$out/runtime.hex" ] &&
-        [ "$(cat "$out/runtime.err")" = "anchorc: PLANNED: -: anchorc build $planned" ]; then
-        pass "build --runtime of $name is PLANNED and writes no file"
-      else
-        fail "build --runtime of $name: exit $second, stderr: $(cat "$out/runtime.err")"
-      fi
+      creation=$(cat "$out/creation.hex" 2> /dev/null)
+      runtime=$(cat "$out/runtime.hex" 2> /dev/null)
+      if [ "$first" -eq 0 ] && [ "$second" -eq 0 ]; then pass "build of $name exits 0"; else fail "build of $name: exit $first and $second, stderr: $(cat "$out/build.err")"; fi
+      if [ "$(hex_ok "$creation")" -eq 1 ] && [ "$(hex_ok "$runtime")" -eq 1 ]; then pass "build of $name writes lowercase hex"; else fail "build of $name: not lowercase hex"; fi
+      held=1
+      for selector in eecdf927 382262fc 738198b4 13723792; do
+        case $runtime in *"63$selector"*) ;; *) held=0 ;; esac
+      done
+      if [ "$held" -eq 1 ]; then pass "runtime of $name holds each selector and the amend selector"; else fail "runtime of $name: a selector is missing"; fi
+      case $creation in
+        ?*"$runtime") pass "creation of $name ends with the runtime" ;;
+        *) fail "creation of $name does not end with the runtime" ;;
+      esac
+      # The tail: the binomial part, the rows of each constitution block in
+      # the order of anchorc table, then admit, schema and mask of each policy.
+      tail=$(awk 'function binom(n, k,   r, i) { r = 1; for (i = 1; i <= k; i++) r = r * (n - k + i) / i; return r }
+        $1 == "members" { m = $2 } $1 == "candidates" { kc = $2 }
+        $1 == "policy" { a[$2] = $4 == "allow"; s[$2] = $8; np = $2 + 1 }
+        $1 == "amendTo" { v = 0; for (b = length($3); b >= 1; b--) v = 2 * v + substr($3, b, 1); mask[$2] = v }
+        $1 == "tally" { i = 1; while ($i != ":") i++; f = $(i + 1)
+          r = r sprintf("%02x%04x%04x", (f == "one") + 2 * (f == "two"), $(i + 2) + 0, $(i + 3) + 0) }
+        END { for (d = 1; d < kc; d++) for (x = 0; x <= m; x++) t = t sprintf("%04x", binom(x + d - 1, d))
+          for (p = 0; p < np; p++) q = q sprintf("%02x%016x%02x", a[p], s[p], mask[p])
+          print t r q }' "$out/table.out")
+      nrows=$(awk '/^tally/ { n++ } END { print n }' "$out/table.out")
+      case $runtime in
+        ?*"$tail") pass "runtime of $name ends with the binomial part, the $nrows rows and the 10-byte policy records of its table" ;;
+        *) fail "runtime of $name: does not end with $tail" ;;
+      esac
       continue
       ;;
   esac

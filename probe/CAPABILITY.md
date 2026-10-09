@@ -1,6 +1,6 @@
-# anchor-lang host capability: TinyCC to EVM (M6 done, chunk 14, 2026-10-09)
+# anchor-lang host capability: TinyCC to EVM (M7 done, chunk 19, 2026-10-09)
 
-This file records what the `tcc-evm` host can do at the end of chunk 14
+This file records what the `tcc-evm` host can do at the end of chunk 19
 (SPEC section 10). The host is the C99 compiler `anchorc`, built by
 TinyCC. The target is EVM bytecode for one contract. Each fact cites a file
 or a test. PLANNED work has no evidence yet.
@@ -131,32 +131,35 @@ tabulates the rule and makes the full fork check.
 
 ## Planned
 
-M6 is done (SPEC section 10, chunks 9 to 14): chunk 9
-adds `tools/port.py` and no capability, chunks 10 to 12 add a list of
-constitutions at compile time, a guarded `amend(uint256)` entry and its
-chain tests (O3), and chunk 13 adds a `dispute(bytes32,uint256,bytes32)`
-entry that writes no storage (O7; see `## Compiler` and `## Gates`).
-Chunk 14 ports the host again to the M5 kit, lang-template
-`hosts/tcc-evm-anchor`, with `tools/port.py` (see `## Gates`). `HashDom`
-stays `nonZero` only (O4, SPEC section 9). Nothing is planned after M6.
+M6 is done (SPEC section 10, chunks 9 to 14): the `amend` entry (O3), the
+`dispute` entry (O7) and the port to the M5 kit with `tools/port.py`.
+
+M7 is done (SPEC section 10, chunks 15 to 19). Chunk 15 adds the short
+path of `constitutionOf r`. Chunk 16 gives the measured cause of the limit
+of the general path, with pins at 282 and 283 members (see `## Limits`).
+Chunk 17 adds a counted skip to the 4 chain test files. Chunk 18 ports M7
+to the kit, lang-template `hosts/tcc-evm-anchor`. Chunk 19 corrects the
+text of this file and of two kit files, `docs/CAPABILITY.md` and
+`README.md`. The limit of SPEC section 7 is final.
+Nothing is planned after M7.
 
 ## Gates (2026-10-09)
 
-All GREEN on the chunk 14 tree:
+All GREEN on the chunk 19 tree:
 
 - `make` (tcc `-Wall -Werror`).
 - `make check-clang`.
 - `make test`: `test/parse.sh` 46 cases (21 round trips), `test/evm.sh` 9
-  cases, `test/check.sh` 53 cases, `test/table.sh` 21 cases,
+  cases, `test/check.sh` 53 cases, `test/table.sh` 26 cases,
   `test/eval.sh` 36 cases, including both recursive prelude defs and both
   laws of F13, `test/build.sh` 54 cases, `test/run.sh` 55 cases,
   `test/deploy.sh` 17 cases, `test/diff.sh` 81 cases (6 traces; trace E
   calls `amend` and trace F calls `dispute`) and `test/laws.sh` 40 cases
   (with the `amend` laws of O3 and the `dispute` laws of O7), the last
-  four on geth `evm` 1.14.12 (412 cases in all).
+  four on geth `evm` 1.14.12 (417 cases in all).
+- The skip sum of `make test`: 0 with `evm`, and 193 with no `evm` on PATH
+  (55, 17, 81 and 40 cases in the last four test files).
 - `tools/port.py --check` on lang-template `hosts/tcc-evm-anchor`: exit 0,
-  50 files.
-- lang-template: the kit `make check` (412 cases, `gate: 0 failures`), the
-  root `make test` (29 tests), the root `make check` up to `hosts/mech`
-  (status 2 there: no `mech` tool on this machine), then each host block
-  after `hosts/mech`, run separately.
+  55 files.
+- lang-template: the kit `make check` (417 cases, `gate: 0 failures`, skip
+  sum 0) and the root `make doc-check` (0 problems).

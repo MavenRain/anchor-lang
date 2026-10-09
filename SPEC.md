@@ -826,6 +826,7 @@ staged, and a status line here. The USER commits.
 | M7 | 16 | R3 a3: the limit text in section 7 and in probe/CAPABILITY.md `## Limits` (`MEMORY` at 283 members, `TYPE_FUEL` at 816); pins at 282 and 283 members for the general path; gate: the same gate, dash scan, no `src/` change |
 | M7 | 17 | b2: a counted skip in the 4 chain test files and in the `make test` summary; gate: the same gate, and one run with `evm` not on PATH that shows the skip count |
 | M7 | 18 | Port to the kit (`--write`); the kit `test/gate.sh` skip sum and the kit README (b2, b3) by hand; M7 close-out; gate: `--check` exits 0, the kit `make check`, the root `make doc-check` and `make test`, D0 |
+| M7 | 19 | a + c1 (M8 kickoff RULED: no M8): the M7 text of probe/CAPABILITY.md (title, `## Planned`, `## Gates`); the kit `docs/CAPABILITY.md` and README by hand (the same text, the M7 `## Limits` through the port renames, the c1 note on the SPEC cites; the SPEC-cite line of the kit debt goes); gate: dash scan, origin-name counts, staged paths, the counts against the kit README, `--check` exits 0, `make test`, the kit `make check`, the root `make doc-check` |
 
 Status 2026-10-07: chunk 0 staged.
 
@@ -1165,3 +1166,26 @@ The checks of chunk 17 stay GREEN: `make`, `make check-clang`, `make test`
 (417 compiler cases and 13 port-script regressions, skip sum 0), one
 `make test` with no `evm` (skip sum 193), and D0 with 22 compares and 0
 differences against the build of chunk 17.
+
+M8 kickoff, RULED 2026-10-09 (USER, "Accept all recommendations"): there
+is no M8. Chunk 19 is a (the two capability files) and c1 (a note on the
+SPEC cites in the kit), with the label M7 in this section. b1 (the
+tcc-evm-dao split) stays as kit debt. The limit of section 7 is final: the
+general path stays at 282 members, and there is no plan for a1, a2 or a4.
+
+Status 2026-10-09: chunk 19 staged. M7 done, and there is no M8.
+probe/CAPABILITY.md gives the state after M7: the title, `## Planned`
+(chunks 15 to 19; nothing is planned after M7) and `## Gates` (26 cases in
+`test/table.sh`, 417 cases in all, 55 files, the skip sum). The kit
+`docs/CAPABILITY.md` changes by hand in lang-template: the same text, and
+in `## Limits` the M7 text through the port renames. The kit README
+(`## Origin`) and the kit `docs/CAPABILITY.md` give the c1 note: each
+"SPEC section N" in the kit is a section of this file at commit `211dc59`.
+The kit debt has the b1 line only. There is no `src/` change. Gate GREEN:
+no dash in the 4 files; the origin-name counts are equal to HEAD; the
+staged paths are the 4 files only; each count in the two capability files
+is equal to the kit README ok table; `--check` on the kit exits 0 (55
+files); `make test` (417 compiler cases, 13 port-script regressions, skip
+sum 0; skip sum 193 with no `evm`); the kit `make check` (417 ok,
+`gate: 0 failures`, skip sum 0; skip sum 193 with no `evm`); the
+lang-template `make doc-check` (0 problems).

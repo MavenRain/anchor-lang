@@ -1017,3 +1017,22 @@ and `arrow-debreu-amend.anc`, `table`, `check`, `abi`, `build` and
 build 54, run 55, deploy 17, diff 81, laws 40; plus 13 port-script
 regressions). `--check` on the lang-template kit exits 1 and lists only
 the chunk 10 to 13 paths.
+
+Status 2026-10-09: chunk 14 staged. M6 done. `tools/port.py --write` wrote
+the 50 mapped files to the lang-template kit `hosts/tcc-evm-anchor`: 17
+changed files and 6 new examples (`arrow-debreu-amend.lang`,
+`arrow-debreu-dispute.lang` and the four `amend-*` mutants). The port step
+(on lang-template d7575eb) changed only paths under
+`hosts/tcc-evm-anchor`. The script does not write the kit-owned files
+(`README.md`, `FORMERS.md`, `Makefile`,
+`.gitignore`, `docs/` and `test/gate.sh`). There is no change to `src/`.
+Gate GREEN: `make`, `make check-clang`, `make test` (412 compiler cases, the
+counts of chunk 13, plus 13 port-script regressions), and D0 with 20
+compares and 0 differences. `--check` on the kit exits 0 with 50 files.
+The kit `make check` passed (412 cases, `gate: 0 failures`). The root
+`make test` passed (29 tests). The root `make check` passed `doc-check` and
+`test` (29 tests). Then it exited with status 2 at `hosts/mech`
+(`spawnSync mech ENOENT`, no `mech` tool on this machine), as at M5. The host
+blocks after `hosts/mech` were then run separately and passed:
+`hosts/assay`, `hosts/tcc-json`, `hosts/tcc-evm-contract`, `hosts/tcc-wasm`,
+`hosts/tcc-evm`, `hosts/tcc-evm-dao` and `hosts/tcc-evm-anchor`.

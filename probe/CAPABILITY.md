@@ -1,4 +1,4 @@
-# anchor-lang host capability: TinyCC to EVM (M4, 2026-10-08)
+# anchor-lang host capability: TinyCC to EVM (M5, 2026-10-08)
 
 This file records what the `tcc-evm` host can do at the end of chunk 7
 (SPEC section 10). The host is the C99 compiler `anchorc`, built by
@@ -110,8 +110,8 @@ tabulates the rule and makes the full fork check.
 
 ## Planned
 
-Nothing after chunk 7. SPEC section 10 names no milestone after M4. The
-port of the host to lang-template comes after M4.
+Nothing after M5. M5 ported the host to lang-template as
+`hosts/tcc-evm-anchor` (SPEC section 10). The capability did not change.
 
 ## Gates (2026-10-08)
 

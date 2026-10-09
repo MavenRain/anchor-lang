@@ -21,7 +21,7 @@ The tests of chunk 6 (M3) run the contract on geth `evm`: a deploy test, a
 differential test against a model of the outcome table and the law tests
 of the log. Chunk 7 (M4) adds `transportOutcome`, `congOutcome`,
 `symmOutcome` and `transOutcome` for `EqOutcome` to the prelude (F12, F13).
-See `SPEC.md` section 10 for the milestones.
+M5 ports the host to lang-template (`hosts/tcc-evm-anchor`). See `SPEC.md` section 10.
 
 ## Build
 

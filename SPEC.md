@@ -496,8 +496,8 @@ representation for indexers. The design model is not an event log.
 - Origins: the type formers and this template come from lang-template at
   ad3cb92. The compiler starts from the escrow-lang TinyCC compiler at
   cfe211b (lexer, parser, printer, arena, diagnostics, keccak, EVM
-  assembler). RULED 2026-10-07 (USER): a standalone repo now; a later port
-  can return the host to lang-template as `hosts/tcc-evm`.
+  assembler). RULED 2026-10-07 (USER): a standalone repo first. M5 ported
+  the host to lang-template as `hosts/tcc-evm-anchor` (lang-template 5bec924).
 - Gate tools: geth `evm` (1.14.12) runs the bytecode (`test/run.sh`,
   `test/deploy.sh`, `test/diff.sh` and `test/laws.sh`); Foundry `cast`
   gives calldata and selectors as an oracle. The build does not need them.
@@ -558,6 +558,7 @@ staged, and a status line here. The USER commits.
 | M2 | 5 | Contract writer: entries, storage, outcome table, `Anchored` log; `anchorc build`, `abi` |
 | M3 | 6 | Differential tests against geth `evm` on call traces; law tests (monotone, idempotent, distinct anchors commute, no deletion, `amend` is the identity on the log, no admit at a `two` tally); deploy test; docs |
 | M4 | 7 | F13: `transportOutcome` and `congOutcome` for `EqOutcome`, with `symmOutcome` and `transOutcome` (F12); check, eval and build tests |
+| M5 | 8 | Port the host to lang-template as `hosts/tcc-evm-anchor`: rename to `langc` and `.lang`, move the prelude to `domain/domain.lang`, register the kit at the lang-template root; gate: the kit `make check` and the root `make test` |
 
 Status 2026-10-07: chunk 0 staged.
 
@@ -690,3 +691,13 @@ files gets two more cases. There is no change to `src/`. Gate GREEN:
 cases; evm.sh 9 cases; check.sh 45 cases; table.sh 15 cases; eval.sh 28
 cases; build.sh 36 cases; run.sh 19 cases; deploy.sh 13 cases; diff.sh 45
 cases; laws.sh 23 cases), 273 cases in all.
+
+Status 2026-10-08: M5 staged. Session 1 copied the compiler to lang-template
+as `hosts/tcc-evm-anchor` (lang-template 5bec924): the names `anchorc`,
+`anchor_`, `ANCHOR_` and `.anc` become `langc`, `lang_`, `LANG_` and `.lang`,
+and `prelude/Prelude.anc` becomes `domain/domain.lang`. Session 2 registers
+the kit at the lang-template root (`bin/new-lang.sh`, `Makefile`,
+`README.md`, `tests/test_tools.py`, `formers/FORMERS.md`). Gate GREEN: the
+kit `make check` (273 cases, the counts of M4), the root `make test` (27
+tests). The root `make check` stops at `hosts/mech` (no `mech` tool on
+this machine). There is no change to `src/` in this repository.

@@ -503,11 +503,34 @@ The checker tabulates constitution k >= 1 at the sorted profile of each
 tally: c0 ballots of 0 first, then c1 ballots of 1, and so on. At that
 profile, `constitutionOf r` gives r at the tally. A constitution that does
 not factor through `orbitProjection` runs as its value at the sorted
-profile. This is a limit. The evaluation of a profile of M ballots nests
-one level for each ballot, so a large M is `TYPE_FUEL` at the def
-`amendments` (`CHECK_DEPTH`). `examples/programs/arrow-debreu-amend.anc`
-tabulates with 200 members and not with 300. With C = 1, `TABLE_LIMIT` does
-not change. With C > 1, a table of more than 4096 rows, C R, is
+profile.
+
+Short path (RULED a1b, 2026-10-09, M7 chunk 15). If constitution k is the
+value of `constitutionOf r`, the checker applies r to the tally of each row
+(`profile_row`, `src/check.c`). It builds no profile. That value is a
+closure of the inner `fun` of the prelude `constitutionOf`, with r in its
+environment. At the sorted profile, `orbitProjection` gives the tally, thus
+the row is the same. The fuel and depth limits do not change. Thus
+`examples/programs/arrow-debreu-amend.anc` tabulates up to the table limit:
+2047 members give 2 blocks of 2048 rows (`test/table-amend-2047.anc`). At
+200 members, `test/table-short-200.anc` (`constitutionOf unanimous`) and
+`test/table-general-200.anc` (the general path) give the same table bytes.
+The test is on the closure, not on the meaning. Thus a constitution with
+the same meaning in a different form, for example
+`fun (x : Profile) => r (orbitProjection x)`, runs as its value at the
+sorted profile.
+
+This is a limit (RULED a3, 2026-10-09, M7 chunk 16). The general path is
+the path of a constitution k that is not the value of `constitutionOf r`.
+On this path, each row builds and evaluates a profile of M ballots. Two
+limits stop the general path at the def `amendments`. The first limit is
+the arena of one run (`ANCHOR_ARENA_MAX` = 256 MiB, `src/syntax.h:37`).
+With 2 candidates, 282 members tabulate, and 283 to 815 members are
+`MEMORY` ("the arena is full"). The second limit is the depth of the
+evaluation (`CHECK_DEPTH` = 4096 nested calls, `src/check.c`). With 816
+members and more, the result is `TYPE_FUEL` ("evaluation nests too deep").
+`test/table-general-282.anc` (566 rows) and `test/table-general-283.anc`
+(`MEMORY`) pin the edge. With C = 1, `TABLE_LIMIT` does not change. With C > 1, a table of more than 4096 rows, C R, is
 `TABLE_LIMIT` at the def `candidates`, with the message "M members, K
 candidates and C constitutions give more than 4096 rows". Each `amendTo p
 k` must reduce to a closed flag, else `TABLE_STUCK` at the def `amendTo`.
@@ -790,6 +813,10 @@ staged, and a status line here. The USER commits.
 | M6 | 12 | O3 chain tests: laws.sh (`amend` is the identity on the pairs; the canonical `amend` changes nothing), diff.sh (the constitution slot in the awk model, 1 trace with `amend`), deploy.sh (the new program); gate: `make test` |
 | M6 | 13 | O7: prelude `dispute`; the `dispute` entry, the 17-byte record and the `Disputed` log when some policy has `window` > 0; one new program; run.sh, laws.sh and diff.sh cases; gate: `make test` |
 | M6 | 14 | Port: the script writes lang-template `hosts/tcc-evm-anchor`; gate: the kit `make check`, the root `make test`, the root `make check` blocks after `hosts/mech`, `--check` exits 0 |
+| M7 | 15 | R3 a1b: the short path for `constitutionOf r` in `profile_row` (`src/check.c`); the table cases `test/table-*.anc` (2047 members pass; the same table at 200 members on the two paths); the M7 rows of this section; gate: `make`, `make check-clang`, `make test`, D0 with the 20 compares plus `table` at 200 and 282 members |
+| M7 | 16 | R3 a3: the limit text in section 7 and in probe/CAPABILITY.md `## Limits` (`MEMORY` at 283 members, `TYPE_FUEL` at 816); pins at 282 and 283 members for the general path; gate: the same gate, dash scan, no `src/` change |
+| M7 | 17 | b2: a counted skip in the 4 chain test files and in the `make test` summary; gate: the same gate, and one run with `evm` not on PATH that shows the skip count |
+| M7 | 18 | Port to the kit (`--write`); the kit `test/gate.sh` skip sum and the kit README (b2, b3) by hand; M7 close-out; gate: `--check` exits 0, the kit `make check`, the root `make doc-check` and `make test`, D0 |
 
 Status 2026-10-07: chunk 0 staged.
 
@@ -1062,3 +1089,41 @@ files. In lang-template, the kit `make check` (412 cases, `gate: 0
 failures`), the root `make doc-check` (0 problems) and the root `make test`
 (29 tests) passed. My choice, not ruled: the gate prints the
 `tools/__pycache__/` line after the `make test` summary.
+
+M7 (chunks 15 to 18), RULED 2026-10-09 (USER, "Take all recommendations"):
+R3 is a1b (the short path of section 7) and a3 (keep the limit and give its
+measured cause: `MEMORY` at 283 members, `TYPE_FUEL` at 816). The kit debt
+is b2 (a counted skip when `evm` is not on PATH) and b3 (the kit README).
+b1 (the tcc-evm-dao split) stays as kit debt. A new test is a program in
+the language (an `.anc` file) with its expected result.
+
+Status 2026-10-09: chunk 15 staged. M7 starts. `profile_row`
+(`src/check.c`) has the short path of section 7 (RULED a1b): for
+`constitutionOf r`, the checker applies r to the tally and builds no
+profile. The new helpers are `tally_value` and `constitution_rule`. Three
+table cases are programs in the language: `test/table-amend-2047.anc`
+(2047 members, 4096 rows), `test/table-short-200.anc` and
+`test/table-general-200.anc` (the same table bytes on the two paths). One
+loop in `test/table.sh` reads their expect lines for each case. The
+2048-member `TABLE_LIMIT` case stays. The limit text of section 7 (after
+the short path) still gives the old cause and edge; chunk 16 changes it.
+Gate GREEN: `make`, `make check-clang`, `make test` (415 compiler cases,
+the 412 of M6 plus the 3 table cases, and 13 port-script regressions), and
+D0 with 22 compares and 0 differences: the 20 of M6, plus `table` of
+`arrow-debreu-amend` at 200 and 282 members against the HEAD build.
+`--check` on the kit exits 1 and lists only the 5 mapped paths of this
+chunk.
+
+Status 2026-10-09: chunk 16 staged. Section 7 gives the measured cause of
+the limit of the general path (RULED a3). probe/CAPABILITY.md `## Limits`
+gives the same cause. From 283 to 815 members, the arena is full
+(`MEMORY`). From 816 members, the evaluation nests too deep (`TYPE_FUEL`,
+`CHECK_DEPTH`). The old text (`TYPE_FUEL` at 300 members) is removed,
+because `arrow-debreu-amend.anc` now uses the short path. Two table cases
+pin the edge: `test/table-general-282.anc` (566 rows) and
+`test/table-general-283.anc` (`MEMORY`). The loop of `test/table.sh` reads
+one new key, "code CODE". There is no `src/` change. Gate GREEN: `make`,
+`make check-clang`, `make test` (417 compiler cases, the 415 of chunk 15
+plus the 2 table cases, and 13 port-script regressions). D0 has 22 compares
+and 0 differences against the build of chunk 15. `--check` on the kit
+exits 1 and lists only the 7 mapped paths of chunks 15 and 16.

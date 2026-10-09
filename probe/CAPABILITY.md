@@ -45,9 +45,15 @@ or a test. PLANNED work has no evidence yet.
 - A program has at most 8 constitutions (`AMEND_LIMIT`,
   `examples/mutants/amend-limit.anc`). With C constitutions and R
   tallies, a table has at most 4096 rows, C R (`TABLE_LIMIT`,
-  `test/table.sh`). A constitution k >= 1 tabulates only while the
-  evaluation of a profile of M ballots stays under `CHECK_DEPTH` = 4096
-  nested calls, else `TYPE_FUEL` (SPEC section 7).
+  `test/table.sh`). A constitution k >= 1 that is not the value of
+  `constitutionOf r` (the general path) builds a profile of M ballots
+  for each row. With 2 candidates, 282 members tabulate
+  (`test/table-general-282.anc`). From 283 to 815 members, the arena is
+  full (`MEMORY`, `test/table-general-283.anc`). With 816 members and
+  more, the evaluation goes past `CHECK_DEPTH` = 4096 nested calls
+  (`TYPE_FUEL`). The short path of `constitutionOf r` builds no profile
+  and tabulates up to `TABLE_LIMIT` (`test/table-amend-2047.anc`; SPEC
+  section 7).
 - Universes: `Type 0` has the type `Type 1`, and `Type 1` has no type
   (`TYPE_UNIVERSE`). An explicit `Type 1` annotation is refused. Pi,
   Sigma, product and sum formation take the maximum universe of their

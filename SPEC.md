@@ -1036,3 +1036,29 @@ The kit `make check` passed (412 cases, `gate: 0 failures`). The root
 blocks after `hosts/mech` were then run separately and passed:
 `hosts/assay`, `hosts/tcc-json`, `hosts/tcc-evm-contract`, `hosts/tcc-wasm`,
 `hosts/tcc-evm`, `hosts/tcc-evm-dao` and `hosts/tcc-evm-anchor`.
+
+Status 2026-10-09: M6 close-out (no row in this section). The USER
+committed chunk 14 as lang-template eba77d8 and anchor-lang 4dba2d1. The
+lang-template commit also refreshed the kit `README.md` and
+`docs/CAPABILITY.md` for M6. Thus the USER ruled R1 again in this step:
+verify only. A script imports `tools/port.py` and found no kit doc to
+change. The README ok table is 46, 9, 53, 21, 36, 54, 55, 17, 81 and 40
+(412 cases). The 4 chain test files have 193 of the 412 cases. The rename
+table has the counts of the initial port at 248705e: the 44 mapped files
+plus `formers/tcc-evm.md` and `probe/CAPABILITY.md` give the same counts.
+The kit `docs/CAPABILITY.md` is `probe/CAPABILITY.md` with the port renames
+and kit edits at 5 places. The table limit is for one constitution. One
+sentence about the runtime is not in the kit. One line says "every
+constitution" where the source says "the rule". The Planned and Gates text
+is for the kit. No `anchorc`, `anchor_`, `ANCHOR_` or `.anc` stays in it.
+R2 (a): `make test` runs `python3 -I -B tools/test_port.py`
+(`Makefile:38`), thus it does not write `tools/__pycache__/`. R3 stays
+OPEN: a constitution k >= 1 tabulates at the sorted profile, and
+`arrow-debreu-amend` (300 members) stops at `TYPE_FUEL`, the section 7
+limit. Gate GREEN: `make`, `make check-clang`, `make test` (412 compiler
+cases and 13 port-script regressions, then no `tools/__pycache__/`), and D0
+with 20 compares and 0 differences. `--check` on the kit exits 0 with 50
+files. In lang-template, the kit `make check` (412 cases, `gate: 0
+failures`), the root `make doc-check` (0 problems) and the root `make test`
+(29 tests) passed. My choice, not ruled: the gate prints the
+`tools/__pycache__/` line after the `make test` summary.

@@ -35,7 +35,7 @@ check-clang: build/prelude.c
 	$(CLANG) $(CLANGFLAGS) src/*.c test/*.c tools/*.c build/prelude.c
 
 test: build/anchorc build/parsetool build/evmtool
-	python3 -I tools/test_port.py
+	python3 -I -B tools/test_port.py
 	sh test/parse.sh
 	sh test/evm.sh
 	sh test/check.sh

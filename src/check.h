@@ -2,11 +2,16 @@
  *
  * anchor_check checks the program's `def members : Nat := N` first, then
  * the embedded prelude, then the rest of the program. The program must
- * define `candidates : Candidates` and `rule : Tally -> Outcome`. Errors go
- * to the Diag of the run as "anchorc: CODE: DEF: message":
+ * define `candidates : Candidates` and `rule : Tally -> Outcome`. It may
+ * define `amendments : Constitutions` and `amendTo : Policy -> Nat -> Flag`,
+ * both or neither (O3, chunk 10). Errors go to the Diag of the run as
+ * "anchorc: CODE: DEF: message":
  *
- *   REFUSE_MEMBERS, REFUSE_DATA, REFUSE_REC, REFUSE_NAME, REFUSE_FORK
+ *   REFUSE_MEMBERS, REFUSE_DATA, REFUSE_REC, REFUSE_NAME, REFUSE_FORK,
+ *   REFUSE_AMEND
  *     the refusal list of SPEC section 2;
+ *   AMEND_LIMIT, TABLE_STUCK
+ *     more than 8 constitutions, or amendments is not a list (SPEC section 7);
  *   TYPE_SCOPE, TYPE_DUPLICATE, TYPE_MISMATCH (with both normal forms),
  *   TYPE_SHAPE, TYPE_INFER, TYPE_UNIVERSE, TYPE_ERASED, TYPE_MATCH, TYPE_MU,
  *   TYPE_REC, TYPE_NAT, TYPE_FUEL, TYPE_INTERNAL, MEMORY
@@ -38,19 +43,23 @@ typedef struct {
   size_t candidates;     /* K; policies 0 to K-1 are the candidates, in order */
   size_t npolicies;      /* the candidates, then each other policy of an outcome */
   const Ast **policies;  /* the closed normal form of each policy */
-  size_t nrows;          /* one row for each tally */
-  const unsigned *counts; /* nrows rows of K counts */
-  const AnchorRow *rows;
+  size_t constitutions;  /* C: rule, then the constitutions of amendments (O3) */
+  const unsigned char *amend; /* C > 1: one mask for each policy, bit k set when amendTo p k is yes; else NULL */
+  size_t nrows;          /* R: one row for each tally */
+  const unsigned *counts; /* R rows of K counts */
+  const AnchorRow *rows;  /* C R rows: the R rows of constitution b start at rows + b R */
 } AnchorTable;
 
 /* Tabulates rule over every tally: each count vector over the candidates
  * whose sum is members, (members, 0, ..., 0) first and (0, ..., 0,
  * members) last, in reverse lexicographic order. Each outcome must reduce
  * to none, one p or two p q with closed policies, and each side of a
- * two p q must be frozen (the full fork check of SPEC section 2). Returns
- * ANCHOR_EXIT_OK, or ANCHOR_EXIT_REFUSED with TABLE_LIMIT, TABLE_STUCK,
- * REFUSE_FORK, TYPE_FUEL or MEMORY. The table lives in the arena of
- * CHECKED. */
+ * two p q must be frozen (the full fork check of SPEC section 2). When C >
+ * 1, constitution b >= 1 has the same check at the sorted profile of each
+ * tally, then amendTo p b must be a closed flag at each policy p and each
+ * b. Returns ANCHOR_EXIT_OK, or ANCHOR_EXIT_REFUSED with TABLE_LIMIT (R >
+ * 4096, or C R > 4096 when C > 1), TABLE_STUCK, REFUSE_FORK, TYPE_FUEL or
+ * MEMORY. The table lives in the arena of CHECKED. */
 int anchor_table(AnchorChecked *checked, AnchorTable *table);
 
 /* The two fields of policy I of T that the contract reads (anchorc build

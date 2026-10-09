@@ -1,6 +1,6 @@
 #!/bin/sh
 # Checker tests of anchorc, run by make test after make (SPEC section 10,
-# chunks 3, 4b and 7): the prelude, the fate report of each example program
+# chunks 3, 4b, 7 and 10): the prelude, the fate report of each example program
 # and the mutants in examples/mutants. Files go to build/test. Each run stays far under 4 GB:
 # the arena of one run takes at most ANCHOR_ARENA_MAX (src/syntax.h).
 set -u
@@ -99,6 +99,32 @@ tally 0 2
 EOF
 report_is "schelling-ising is two p q at every tally" "$programs/schelling-ising.anc"
 
+# SPEC section 10, O3: one amendment gives two constitutions, and the report
+# gives the fate blocks of each constitution.
+accepts "arrow-debreu-amend checks" "$programs/arrow-debreu-amend.anc"
+cat > "$out/want.txt" <<'EOF'
+members 3
+candidates 2
+constitutions 2
+constitution 0
+fate none 0
+fate one 4
+tally 3 0
+tally 2 1
+tally 1 2
+tally 0 3
+fate two 0
+constitution 1
+fate none 0
+fate one 4
+tally 3 0
+tally 2 1
+tally 1 2
+tally 0 3
+fate two 0
+EOF
+report_is "arrow-debreu-amend gives the fates of each constitution" "$programs/arrow-debreu-amend.anc"
+
 # check tabulates, so a table that is too large is TABLE_LIMIT.
 { printf 'def members : Nat := 4096\n'; tail -n +5 "$programs/arrow-impossibility.anc"; } > "$out/check-limit.anc"
 refuse "check of 4096 members is TABLE_LIMIT" TABLE_LIMIT candidates \
@@ -119,6 +145,21 @@ refuse "log-match is TYPE_MATCH" TYPE_MATCH logSize "the subject is not of the f
   check "$mutants/log-match.anc"
 refuse "rule-type is TYPE_MISMATCH" TYPE_MISMATCH rule "expected Tally -> Outcome, found Nat -> Outcome" \
   check "$mutants/rule-type.anc"
+
+# SPEC sections 2 and 7, O3: amendments and amendTo come together and have
+# their types, a program has at most 8 constitutions, and the fork check
+# runs on each constitution.
+refuse "amend-no-to is REFUSE_AMEND" REFUSE_AMEND amendments "amendments has no amendTo" \
+  check "$mutants/amend-no-to.anc"
+refuse "amend-to-only is REFUSE_AMEND" REFUSE_AMEND amendTo "amendTo has no amendments" \
+  check "$mutants/amend-to-only.anc"
+refuse "amend-limit is AMEND_LIMIT" AMEND_LIMIT amendments "rule and amendments give more than 8 constitutions" \
+  check "$mutants/amend-limit.anc"
+refuse "amend-fork-unfrozen is REFUSE_FORK" REFUSE_FORK amendments "is flagNo" check "$mutants/amend-fork-unfrozen.anc"
+{ awk '/^-- amendTo p k/ { exit } { print }' "$programs/arrow-debreu-amend.anc"
+  printf 'def amendTo : Policy -> Flag := fun (p : Policy) => flagYes\n'; } > "$out/amend-type.anc"
+refuse "an amendTo of type Policy -> Flag is TYPE_MISMATCH" TYPE_MISMATCH amendTo \
+  "expected Policy -> Nat -> sum (prod (), prod ()), found Policy -> sum (prod (), prod ())" check "$out/amend-type.anc"
 
 # SPEC section 3, F13: transport and cong of EqOutcome are prelude defs. A
 # program can use them, a wrong motive or result type is TYPE_MISMATCH, and

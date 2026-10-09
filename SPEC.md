@@ -49,11 +49,23 @@ The compiler refuses these forms in a program, each with a stable code:
 | a recursive definition (`rec`) | `REFUSE_REC` |
 | a definition that uses a core name or a prelude name | `REFUSE_NAME` |
 | a `two p q` outcome where `p` or `q` has `forkFreeze = flagNo` | `REFUSE_FORK` |
+| `amendments` with no `amendTo`, or `amendTo` with no `amendments` | `REFUSE_AMEND` |
 
 The checker explores `case` and `match` alternatives in rule outcomes and
 their policy freeze flags. Every possible fork side must reduce to
 `flagYes`. It conservatively refuses a flag or outcome whose alternatives
 remain unresolved, using `REFUSE_FORK`.
+
+Chunk 10 (O3, section 9) adds two optional program defs:
+`amendments : Constitutions` and `amendTo : Policy -> Nat -> Flag`. A
+program defines both or neither. A program with only one of them is
+`REFUSE_AMEND` at that def ("amendments has no amendTo", "amendTo has no
+amendments"). A def with a different type is `TYPE_MISMATCH`, as for
+`candidates` and `rule`. The checker runs the fork check above on each
+constitution `F` of `amendments`, applied to a free profile `x`, at the def
+`amendments`. The message is the same as the message for `rule`. These
+checks run in each verb, so `check`, `table`, `eval`, `abi` and `build`
+give the same code. My choice, not ruled.
 
 Chunk 4a adds the full fork check by tabulation (section 7). At each
 tally, a `two p q` outcome with a side whose `policyForkFreeze` is
@@ -475,6 +487,39 @@ The report gives no policy numbers. `anchorc table` gives them. `check`
 tabulates one time, so its refusals include the codes of the table
 (`TABLE_LIMIT`, `TABLE_STUCK`, `REFUSE_FORK`). My choice, not ruled.
 
+Chunk 10 (O3, section 9) adds the constitutions. Constitution 0 is `rule`.
+Constitution k, for k >= 1, is item k of `amendments`, so C is 1 plus the
+length of `amendments`. A program has at most 8 constitutions (b5). A
+larger C is `AMEND_LIMIT` at the def `amendments`. A list that does not
+reduce is `TABLE_STUCK` at the def `amendments`. My choice, not ruled.
+
+The checker tabulates constitution k >= 1 at the sorted profile of each
+tally: c0 ballots of 0 first, then c1 ballots of 1, and so on. At that
+profile, `constitutionOf r` gives r at the tally. A constitution that does
+not factor through `orbitProjection` runs as its value at the sorted
+profile. This is a limit. The evaluation of a profile of M ballots nests
+one level for each ballot, so a large M is `TYPE_FUEL` at the def
+`amendments` (`CHECK_DEPTH`). `examples/programs/arrow-debreu-amend.anc`
+tabulates with 200 members and not with 300. With C = 1, `TABLE_LIMIT` does
+not change. With C > 1, a table of more than 4096 rows, C R, is
+`TABLE_LIMIT` at the def `candidates`, with the message "M members, K
+candidates and C constitutions give more than 4096 rows". Each `amendTo p
+k` must reduce to a closed flag, else `TABLE_STUCK` at the def `amendTo`.
+In memory, the table holds one `amendTo` mask for each policy and C blocks
+of R rows (`src/check.h`). My choice, not ruled.
+
+With C = 1, `table` and `check` print the same bytes as before. With C > 1,
+`anchorc table` prints `members M`, `candidates K`, `constitutions C` and
+the policy lines. Then it prints `amendTo i MASK` for each policy i. MASK
+has C digits, k = 0 first, and digit k is 1 when `amendTo p k` is
+`flagYes`. Then, for each constitution k, it prints `constitution k` and
+the tally rows of that constitution. `anchorc check` prints `members M`,
+`candidates K` and `constitutions C`. Then, for each constitution k, it
+prints `constitution k` and the fate blocks of that constitution. Until
+chunk 11, `anchorc abi` and `anchorc build` of such a program exit 1 with
+`PLANNED` ("anchorc abi has no back end yet for more than one constitution
+(SPEC section 10)") and write no file. My choice, not ruled.
+
 `anchorc eval PROG NAME` (chunk 4b) prints the normal form of the def NAME
 of the prelude or PROG, including a prelude `def rec`, in the canonical
 form of the printer, then exits 0. A recursive def prints its normalized
@@ -796,3 +841,23 @@ of M4, plus 13 port-script regressions in `tools/test_port.py`).
 with the kit, is empty. A copy with one changed byte, a copy with one
 mapped file removed and a copy with one extra file each make `--check`
 exit 1.
+
+Status 2026-10-08: chunk 10 staged. The checker reads the optional defs
+`amendments` and `amendTo` (O3, section 9). It adds `REFUSE_AMEND`
+(section 2), `AMEND_LIMIT` and the C R bound of `TABLE_LIMIT` (section 7),
+the fork check of each constitution, the `amendTo` masks, and the `table`
+and `check` forms for more than one constitution. `abi` and `build` give
+`PLANNED` for such a program, because the contract writer is chunk 11.
+`src/evm.c` does not change. The prelude adds `mu Constitutions` with
+`lastConstitution` and `consConstitution`, and `amendDAO` gives the new
+aggregation with the log of the old state (b9). The new files are
+`examples/programs/arrow-debreu-amend.anc` and the mutants
+`amend-no-to.anc`, `amend-to-only.anc`, `amend-limit.anc` and
+`amend-fork-unfrozen.anc`. For the 3 programs of M5, `table`, `check`,
+`abi`, `build` and `build --runtime` give the same bytes as the binary of
+the parent commit. Gate GREEN: `make`, `make check-clang`, `make test` (304
+compiler cases: parse 45, evm 9, check 52, table 21, eval 34, build 43, run
+19, deploy 13, diff 45, laws 23; plus 13 port-script regressions).
+`--check` on the lang-template kit exits 1 and lists only the chunk 10
+paths. Open: a constitution k >= 1 tabulates only while the evaluation of
+its profile stays under `CHECK_DEPTH` (section 7).

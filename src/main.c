@@ -40,13 +40,19 @@ static int eval_verb(AnchorChecked *checked, char **argv) {
 
 /* The contract of the checked program (src/evm.h): the members, the
  * candidates, and the rows and policy fields of its outcome table. A table
- * refusal returns its code. contract_free frees the rows and the policies. */
-static int contract_of(AnchorChecked *checked, AnchorContract *contract) {
+ * refusal returns its code. A program with more than one constitution is
+ * PLANNED for VERB (chunk 11). contract_free frees the rows and the policies. */
+static int contract_of(AnchorChecked *checked, AnchorContract *contract, const char *verb) {
   memset(contract, 0, sizeof *contract);
   AnchorTable table;
   int status = anchor_table(checked, &table);
   if (status != ANCHOR_EXIT_OK)
     return status;
+  if (table.constitutions > 1) {
+    fprintf(stderr, "anchorc: PLANNED: -: anchorc %s has no back end yet for more than one constitution"
+            " (SPEC section 10)\n", verb);
+    return ANCHOR_EXIT_REFUSED;
+  }
   AnchorContractRow *rows = calloc(table.nrows + 1, sizeof *rows);
   AnchorContractPolicy *policies = calloc(table.npolicies + 1, sizeof *policies);
   contract->rows = rows;
@@ -81,7 +87,7 @@ static void contract_free(AnchorContract *contract) {
 static int abi_verb(AnchorChecked *checked, char **argv) {
   (void)argv;
   AnchorContract contract;
-  int status = contract_of(checked, &contract);
+  int status = contract_of(checked, &contract, "abi");
   if (status == ANCHOR_EXIT_OK)
     status = anchor_abi_write(&contract, stdout, stderr) == 0 ? ANCHOR_EXIT_OK : ANCHOR_EXIT_USAGE;
   contract_free(&contract);
@@ -115,7 +121,7 @@ static int build_verb(AnchorChecked *checked, char **argv) {
   int runtime = strcmp(argv[3], "--runtime") == 0;
   const char *path = argv[runtime ? 5 : 4];
   AnchorContract contract;
-  int status = contract_of(checked, &contract);
+  int status = contract_of(checked, &contract, "build");
   if (status == ANCHOR_EXIT_OK)
     status = write_contract(&contract, runtime, path);
   contract_free(&contract);

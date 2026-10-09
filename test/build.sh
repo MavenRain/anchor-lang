@@ -61,6 +61,39 @@ hex_ok() {
 
 for f in "$programs"/*.anc; do
   name=$(basename "$f")
+  # SPEC section 10, O3: a program with more than one constitution has no
+  # back end yet, so abi and build exit 1 with PLANNED and write no file.
+  case $name in
+    *-amend.anc)
+      rm -f "$out/creation.hex" "$out/runtime.hex"
+      "$anchorc" abi "$f" > "$out/abi.out" 2> "$out/abi.err"
+      abi_status=$?
+      "$anchorc" build "$f" -o "$out/creation.hex" 2> "$out/build.err"
+      first=$?
+      "$anchorc" build "$f" --runtime -o "$out/runtime.hex" 2> "$out/runtime.err"
+      second=$?
+      planned='has no back end yet for more than one constitution (SPEC section 10)'
+      if [ "$abi_status" -eq 1 ] && [ ! -s "$out/abi.out" ] &&
+        [ "$(cat "$out/abi.err")" = "anchorc: PLANNED: -: anchorc abi $planned" ]; then
+        pass "abi of $name is PLANNED"
+      else
+        fail "abi of $name: exit $abi_status, stderr: $(cat "$out/abi.err")"
+      fi
+      if [ "$first" -eq 1 ] && [ ! -e "$out/creation.hex" ] &&
+        [ "$(cat "$out/build.err")" = "anchorc: PLANNED: -: anchorc build $planned" ]; then
+        pass "build of $name is PLANNED and writes no file"
+      else
+        fail "build of $name: exit $first, stderr: $(cat "$out/build.err")"
+      fi
+      if [ "$second" -eq 1 ] && [ ! -e "$out/runtime.hex" ] &&
+        [ "$(cat "$out/runtime.err")" = "anchorc: PLANNED: -: anchorc build $planned" ]; then
+        pass "build --runtime of $name is PLANNED and writes no file"
+      else
+        fail "build --runtime of $name: exit $second, stderr: $(cat "$out/runtime.err")"
+      fi
+      continue
+      ;;
+  esac
   "$anchorc" table "$f" > "$out/table.out"
   members=$(awk '/^members/ { print $2 }' "$out/table.out")
   candidates=$(awk '/^candidates/ { print $2 }' "$out/table.out")

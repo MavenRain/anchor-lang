@@ -1,6 +1,6 @@
-# anchor-lang host capability: TinyCC to EVM (M5, 2026-10-08)
+# anchor-lang host capability: TinyCC to EVM (M6 chunk 10, 2026-10-08)
 
-This file records what the `tcc-evm` host can do at the end of chunk 7
+This file records what the `tcc-evm` host can do at the end of chunk 10
 (SPEC section 10). The host is the C99 compiler `anchorc`, built by
 TinyCC. The target is EVM bytecode for one contract. Each fact cites a file
 or a test. PLANNED work has no evidence yet.
@@ -25,6 +25,9 @@ or a test. PLANNED work has no evidence yet.
   `abi` prints the entries and the `Anchored` log, and `build` writes
   the hex of the contract with the outcome table (chunk 5, SPEC section
   7). Both tabulate one time; a table refusal stops them with its code.
+  For a program with more than one constitution (O3, chunk 10), both exit
+  1 with `PLANNED` and write no file (`test/build.sh`). The contract
+  writer for it is chunk 11.
 
 ## Limits
 
@@ -34,6 +37,12 @@ or a test. PLANNED work has no evidence yet.
   (`PARSE_DEPTH`; `src/syntax.h`, `test/parse.sh`).
 - The checker has `CHECK_FUEL` = 2^24 evaluation steps for each
   declaration and for the fork check (`TYPE_FUEL`, `src/check.c`).
+- A program has at most 8 constitutions (`AMEND_LIMIT`,
+  `examples/mutants/amend-limit.anc`). With C constitutions and R
+  tallies, a table has at most 4096 rows, C R (`TABLE_LIMIT`,
+  `test/table.sh`). A constitution k >= 1 tabulates only while the
+  evaluation of a profile of M ballots stays under `CHECK_DEPTH` = 4096
+  nested calls, else `TYPE_FUEL` (SPEC section 7).
 - Universes: `Type 0` has the type `Type 1`, and `Type 1` has no type
   (`TYPE_UNIVERSE`). An explicit `Type 1` annotation is refused. Pi,
   Sigma, product and sum formation take the maximum universe of their
@@ -94,7 +103,8 @@ Program refusals (SPEC section 2):
 | `REFUSE_DATA` | a `mu` in a program | `examples/mutants/data-decl.anc` |
 | `REFUSE_REC` | a `def rec` in a program | `examples/mutants/rec-def.anc` |
 | `REFUSE_NAME` | a program defines a prelude name or a core name | `examples/mutants/prelude-name.anc`, `examples/mutants/core-name.anc` |
-| `REFUSE_FORK` | a `two p q` side that is not frozen, or a fork that the check cannot see | `examples/mutants/fork-unfrozen.anc`, `test/check.sh` |
+| `REFUSE_FORK` | a `two p q` side that is not frozen, or a fork that the check cannot see | `examples/mutants/fork-unfrozen.anc`, `examples/mutants/amend-fork-unfrozen.anc`, `test/check.sh` |
+| `REFUSE_AMEND` | `amendments` with no `amendTo`, or `amendTo` with no `amendments` | `examples/mutants/amend-no-to.anc`, `examples/mutants/amend-to-only.anc` |
 | `REFUSE_AXIOM` | cannot be reached: the parser gives `PARSE_EXPECT` | `test/check.sh` |
 
 Type codes: `TYPE_SCOPE`, `TYPE_MISMATCH`, `TYPE_SHAPE`, `TYPE_MATCH`,
@@ -120,13 +130,13 @@ only (O4, SPEC section 9).
 
 ## Gates (2026-10-08)
 
-All GREEN on the chunk 7 tree:
+All GREEN on the chunk 10 tree:
 
 - `make` (tcc `-Wall -Werror`).
 - `make check-clang`.
-- `make test`: `test/parse.sh` 40 cases (15 round trips), `test/evm.sh` 9
-  cases, `test/check.sh` 45 cases, `test/table.sh` 15 cases,
-  `test/eval.sh` 28 cases, including both recursive prelude defs and both
-  laws of F13, `test/build.sh` 36 cases, `test/run.sh` 19 cases, `test/deploy.sh` 13
+- `make test`: `test/parse.sh` 45 cases (20 round trips), `test/evm.sh` 9
+  cases, `test/check.sh` 52 cases, `test/table.sh` 21 cases,
+  `test/eval.sh` 34 cases, including both recursive prelude defs and both
+  laws of F13, `test/build.sh` 43 cases, `test/run.sh` 19 cases, `test/deploy.sh` 13
   cases, `test/diff.sh` 45 cases and `test/laws.sh` 23 cases, the last
-  four on geth `evm` 1.14.12 (273 cases in all).
+  four on geth `evm` 1.14.12 (304 cases in all).

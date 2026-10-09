@@ -1148,3 +1148,20 @@ port-script regressions, skip sum 0), and one `make test` with a PATH that
 has no `evm` (exit 0, the 4 skip counts, skip sum 193). D0 has 22 compares
 and 0 differences against the build of chunk 16. `--check` on the kit
 exits 1 and lists only the 11 mapped paths of chunks 15, 16 and 17.
+
+Status 2026-10-09: chunk 18 staged. M7 done. `tools/port.py --write`
+copies the 11 mapped paths of chunks 15, 16 and 17 to the kit
+(`hosts/tcc-evm-anchor` of lang-template): `src/check.c`, `test/table.sh`,
+the 5 table cases and the 4 chain test files. Two kit files change by hand.
+The kit `test/gate.sh` empties `build/test/skips` before the first step and
+prints the skip sum after its summary line (RULED b2). The kit README gives
+the counted skip in `## Gate`. Its `## Kit debt` has no line for the silent
+skips and no stale line for the formers matrix (b3). b1 stays as kit debt.
+There is no `src/` change. Gate GREEN: `--check` on the kit exits 0. The
+kit `make check` shows `gate: 0 failures` two times: with `evm` (skip sum
+0) and with a PATH that has no `evm` (skip sum 193). The lang-template
+`make doc-check` shows 0 problems, and its `make test` passes (29 tests).
+The checks of chunk 17 stay GREEN: `make`, `make check-clang`, `make test`
+(417 compiler cases and 13 port-script regressions, skip sum 0), one
+`make test` with no `evm` (skip sum 193), and D0 with 22 compares and 0
+differences against the build of chunk 17.

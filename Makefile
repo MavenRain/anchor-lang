@@ -35,6 +35,8 @@ check-clang: build/prelude.c
 	$(CLANG) $(CLANGFLAGS) src/*.c test/*.c tools/*.c build/prelude.c
 
 test: build/anchorc build/parsetool build/evmtool
+	mkdir -p build/test
+	: > build/test/skips
 	python3 -I -B tools/test_port.py
 	sh test/parse.sh
 	sh test/evm.sh
@@ -46,6 +48,7 @@ test: build/anchorc build/parsetool build/evmtool
 	sh test/deploy.sh
 	sh test/diff.sh
 	sh test/laws.sh
+	@awk '{ n += $$2 } END { printf "make test: skip sum %d cases%s\n", n, (n > 0 ? " (evm not on PATH)" : "") }' build/test/skips
 
 clean:
 	rm -rf build

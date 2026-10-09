@@ -396,13 +396,16 @@ has schema 2, because no example program has two schemas (the test makes
 the variant with awk). The cast from the tally `(1, 2)` to `(2, 1)`
 reverts, and the cast from `(2, 1)` to `(1, 2)` runs. A cast between two
 policies with the same schema runs, and a cast between `none` rows runs.
-When no `evm` is on the PATH, `test/run.sh` prints a message and exits 0
-(my choice, not ruled). `make test` runs it after `test/build.sh`.
+When no `evm` is on the PATH, `test/run.sh` runs no case, prints
+`skip: 55 cases (evm not on PATH)` and exits 0 (a counted skip, RULED b2,
+section 10). `make test` runs it after `test/build.sh`.
 
 Chunk 6 (M3) adds three test files on geth `evm` and one sourced helper.
 `make test` runs them after `test/run.sh`, in the order `test/deploy.sh`,
 `test/diff.sh`, `test/laws.sh`. When no `evm` is on the PATH, each one
-prints a message and exits 0, as `test/run.sh` does.
+runs no case, prints its skip count and exits 0, as `test/run.sh` does:
+17 cases in `test/deploy.sh`, 81 in `test/diff.sh` and 40 in
+`test/laws.sh`.
 
 - `test/evmchain.sh` has the helpers and no cases. The three test files
   source it. A deploy runs the creation code and the member words with
@@ -688,8 +691,14 @@ representation for indexers. The design model is not an event log.
 - Gate tools: geth `evm` (1.14.12) runs the bytecode (`test/run.sh`,
   `test/deploy.sh`, `test/diff.sh` and `test/laws.sh`); Foundry `cast`
   gives calldata and selectors as an oracle. The build does not need them.
-  `make test` needs `evm` on the PATH to run these four tests; without it,
-  each one exits 0 with a message.
+  `make test` needs `evm` on the PATH to run these four tests (193 cases).
+  Without `evm`, each one runs no case and exits 0 with a counted skip
+  (RULED b2): it prints `skip: N cases (evm not on PATH)` and adds the line
+  to `build/test/skips`. A skip is not a pass and not a fail. After
+  `test/laws.sh`, `make test` prints the sum, `make test: skip sum 193 cases
+  (evm not on PATH)`. With `evm` on the PATH, the sum is 0. N is the number
+  `cases` in each file, so a new case changes it. The gate compares N with
+  the ok count of the run on `evm`.
 - `probe/CAPABILITY.md` records what the host can do now: the TinyCC
   build, the EVM assembler, the checker and its codes, and the gates.
   Nothing is PLANNED after chunk 6. The contract writer of chunk 5 is in
@@ -1127,3 +1136,15 @@ one new key, "code CODE". There is no `src/` change. Gate GREEN: `make`,
 plus the 2 table cases, and 13 port-script regressions). D0 has 22 compares
 and 0 differences against the build of chunk 15. `--check` on the kit
 exits 1 and lists only the 7 mapped paths of chunks 15 and 16.
+
+Status 2026-10-09: chunk 17 staged. The 4 chain test files have a counted
+skip (RULED b2, M7 ruling above). When no `evm` is on the PATH, each one runs no
+case, prints `skip: N cases (evm not on PATH)` and exits 0: 55 cases in
+`test/run.sh`, 17 in `test/deploy.sh`, 81 in `test/diff.sh` and 40 in
+`test/laws.sh`. After `test/laws.sh`, `make test` prints the skip sum (193
+with no `evm`, 0 with `evm`). There is no `src/` change. Gate GREEN:
+`make`, `make check-clang`, `make test` (417 compiler cases and 13
+port-script regressions, skip sum 0), and one `make test` with a PATH that
+has no `evm` (exit 0, the 4 skip counts, skip sum 193). D0 has 22 compares
+and 0 differences against the build of chunk 16. `--check` on the kit
+exits 1 and lists only the 11 mapped paths of chunks 15, 16 and 17.

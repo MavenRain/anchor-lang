@@ -1,6 +1,7 @@
 # anchorc with TinyCC (SPEC section 8). make builds build/anchorc,
 # build/parsetool and build/evmtool, make check-clang checks every C file
-# with clang, and make test runs test/parse.sh, test/evm.sh, test/check.sh,
+# with clang, and make test runs tools/test_port.py and test/parse.sh,
+# test/evm.sh, test/check.sh,
 # test/table.sh, test/eval.sh, test/build.sh, test/run.sh, test/deploy.sh,
 # test/diff.sh and test/laws.sh (the last three source test/evmchain.sh).
 TCC = tcc
@@ -34,6 +35,7 @@ check-clang: build/prelude.c
 	$(CLANG) $(CLANGFLAGS) src/*.c test/*.c tools/*.c build/prelude.c
 
 test: build/anchorc build/parsetool build/evmtool
+	python3 -I tools/test_port.py
 	sh test/parse.sh
 	sh test/evm.sh
 	sh test/check.sh

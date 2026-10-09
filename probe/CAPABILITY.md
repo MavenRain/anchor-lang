@@ -110,8 +110,13 @@ tabulates the rule and makes the full fork check.
 
 ## Planned
 
-Nothing after M5. M5 ported the host to lang-template as
-`hosts/tcc-evm-anchor` (SPEC section 10). The capability did not change.
+M6 (SPEC section 10, chunks 9 to 14). Chunk 9 adds `tools/port.py` and
+no capability. Chunks 10 to 12 add a list of constitutions at compile time
+and a guarded `amend(uint256)` entry (O3). Chunk 13 adds a
+`dispute(bytes32,uint256,bytes32)` entry that writes no storage (O7).
+Chunk 14 ports the host again to the M5 kit, lang-template
+`hosts/tcc-evm-anchor`, with `tools/port.py`. `HashDom` stays `nonZero`
+only (O4, SPEC section 9).
 
 ## Gates (2026-10-08)
 

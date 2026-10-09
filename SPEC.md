@@ -520,11 +520,51 @@ representation for indexers. The design model is not an event log.
 - O3. `amend`. The design forces `GovPhi canonicalAmendment L = Gov L`. M1
   has only the canonical amendment, so there is no `amend` entry.
   `test/laws.sh` tests the identity on the log: the `amend` selectors
-  revert and the storage does not change. A non-canonical `Phi` (a second
-  constitution that members switch to) needs a design for who may amend
-  and under which rule. Not ruled.
+  revert and the storage does not change. RULED 2026-10-08 (USER): a list
+  of constitutions at compile time and a guarded `amend(uint256)` entry
+  (M6, chunks 10 to 12). The defaults below are RULED 2026-10-08 (USER).
+  - b1. Surface. `rule` is constitution 0, the genesis. The optional def
+    `amendments : Constitutions` gives constitutions 1 to C - 1. It is a
+    list of `Profile -> Outcome` that is not empty. Each constitution has
+    the same members and the same candidates. With no `amendments`, C = 1.
+  - b2. Who may amend. Only a member may call `amend(k)`. The rule is read
+    off the policy, as for `admit` (`design/DESIGN.md:50-53`). The
+    optional def `amendTo : Policy -> Nat -> Flag` gives the rule.
+    `amend(k)` runs only when the current outcome is `one p` and
+    `amendTo p k` is `flagYes`. `Policy` gets no new field, so `mkPolicy`
+    keeps its arity. A program with `amendments` and no `amendTo` is
+    `REFUSE_AMEND`. A program with `amendTo` and no `amendments` is
+    `REFUSE_AMEND`.
+  - b3. Canonical amendment. `amend(k)`, with k the current constitution,
+    changes no slot and makes no log, after the member check. This is
+    `GovPhi canonicalAmendment L = Gov L` on `evm`.
+  - b4. Storage. One new slot holds the number of the current
+    constitution. It is slot K + M, after the ballot slots. Its zero word
+    is constitution 0, so the constructor writes no new slot.
+  - b5. Table. The table has one block of rows for each constitution, in
+    the order of `anchorc table`. The row address is
+    `rows + 5 (c R + rank)`, with R the rows of one constitution. The
+    constitutions share the policy records. Each policy record gets a
+    1-byte mask of `amendTo p k` for k = 0 to C - 1. Thus C is at most 8
+    (`AMEND_LIMIT`). `TABLE_LIMIT` applies to C R. `EVM_LIMIT` (EIP-170)
+    bounds the bytes, as now.
+  - b6. O6 applies. `amend` reverts when the outcomes at the current tally
+    before and after the switch are both `one` and the `schema` goes down.
+    This is the guard of `cast` (section 7).
+  - b7. Log. `Amended(uint256)` has topic 0 the event hash and data `k`.
+    `anchorc abi` prints its line.
+  - b8. The `amend` entry, the slot, the mask and the log exist only when
+    C > 1 (D0). For C = 1, the `test/laws.sh` cases with no `amend` entry
+    do not change.
+  - b9. Prelude. `amendDAO` takes a second erased constitution and the new
+    aggregation, and keeps `s.1` (the log). `amendKeepsGov` stays as the
+    canonical case. The checker has no special case for `amend`.
+  - D0. A program that uses no M6 feature keeps its M5 bytes. The 3
+    example programs have C = 1.
 - O4. `HashDom`. M1 has one value, `nonZero` (`h != 0`). The chain cannot
-  see which function made a digest. Not ruled.
+  see which function made a digest. RULED 2026-10-08 (USER): `nonZero`
+  only. The choice of hash function is representation
+  (`design/DESIGN.md:120`). M6 does not change `HashDom`.
 - O5. Member addresses. RULED 2026-10-08 (USER): constructor arguments, one
   per member position, so the program holds no address value.
 - O6. Schema version. The design says it "only increases". RULED 2026-10-08
@@ -533,8 +573,29 @@ representation for indexers. The design model is not an event log.
   before and after the move are both `one`.
 - O7. Challenge window and dispute annotations. No operation in the design
   dictionary reads `window`. M1 carries it in the policy and no entry reads
-  it. Dispute annotations (metadata, never removal) are not in M1. Not
-  ruled.
+  it. Dispute annotations (metadata, never removal) are not in M1. RULED
+  2026-10-08 (USER): a `dispute(bytes32,uint256,bytes32)` entry that
+  writes no storage (M6, chunk 13). The defaults below are RULED 2026-10-08
+  (USER).
+  - A member annotates a recorded pair `(h, t)` with a note digest. The
+    caller must be a member, and the pair slot of `(h, t)` must be set.
+  - `dispute` runs only at a `one p` tally. A `two` tally reverts, as for
+    `anchor`.
+  - `dispute` runs only while `TIMESTAMP < t + window`. The strict `<`
+    makes `window` 0 mean "no dispute".
+  - `window` comes from the policy of the current tally, not of the tally
+    at anchor time. Thus there is no new storage.
+  - The entry emits `Disputed(bytes32,uint256,bytes32)`.
+  - `verify` does not change. A dispute is metadata, never removal
+    (`design/DESIGN.md:94`).
+  - The prelude `dispute` is the identity on `AnchorDAO F`, so the law
+    holds by definition.
+  - The policy record goes from 9 to 17 bytes. The 8 new bytes are
+    `window`.
+  - The dispatch order is `anchor`, `verify`, `cast`, `amend`, `dispute`.
+  - D0. The `dispute` entry and the 17-byte record exist only when some
+    policy has `window` > 0. The 3 example programs have `window` 0, so
+    they keep their M5 bytes.
 - O8. Symmetry group. RULED 2026-10-08 (USER): the full symmetric group on
   the member positions. The trivial group makes anonymity vacuous (design
   section 3).
@@ -559,6 +620,12 @@ staged, and a status line here. The USER commits.
 | M3 | 6 | Differential tests against geth `evm` on call traces; law tests (monotone, idempotent, distinct anchors commute, no deletion, `amend` is the identity on the log, no admit at a `two` tally); deploy test; docs |
 | M4 | 7 | F13: `transportOutcome` and `congOutcome` for `EqOutcome`, with `symmOutcome` and `transOutcome` (F12); check, eval and build tests |
 | M5 | 8 | Port the host to lang-template as `hosts/tcc-evm-anchor`: rename to `langc` and `.lang`, move the prelude to `domain/domain.lang`, register the kit at the lang-template root; gate: the kit `make check` and the root `make test` |
+| M6 | 9 | Rulings of O3, O4 and O7 in SPEC section 9; the M6 rows of section 10; probe/CAPABILITY.md:113 ("Nothing after M5") and its title; the port script with `--check`; gate: `make`, `make check-clang`, `make test` (273 compiler cases plus port-script regressions), dash and origin-name scans, `--check` against lang-template 2a88a3a exits 0 |
+| M6 | 10 | O3 prelude and checker: `amendDAO` with two constitutions, optional `amendments` and `amendTo`, tabulation and fork check for each constitution, `REFUSE_AMEND`, `AMEND_LIMIT`, `table` and `check` for each constitution, one new program (C = 2), mutants; gate: `make test`, new check/table/eval cases, the bytes of the 3 programs unchanged |
+| M6 | 11 | O3 contract writer: the constitution slot, the row blocks, the `amend(uint256)` entry with its guards (member, `one p`, `amendTo`, k < C, O6) and the `Amended` log, the `abi` line; gate: `make test` with new build.sh, evm.sh and run.sh cases |
+| M6 | 12 | O3 chain tests: laws.sh (`amend` is the identity on the pairs; the canonical `amend` changes nothing), diff.sh (the constitution slot in the awk model, 1 trace with `amend`), deploy.sh (the new program); gate: `make test` |
+| M6 | 13 | O7: prelude `dispute`; the `dispute` entry, the 17-byte record and the `Disputed` log when some policy has `window` > 0; one new program; run.sh, laws.sh and diff.sh cases; gate: `make test` |
+| M6 | 14 | Port: the script writes lang-template `hosts/tcc-evm-anchor`; gate: the kit `make check`, the root `make test`, the root `make check` blocks after `hosts/mech`, `--check` exits 0 |
 
 Status 2026-10-07: chunk 0 staged.
 
@@ -709,3 +776,23 @@ Those blocks were then run separately and passed: `hosts/assay`,
 that kit. The shared files of `hosts/tcc-wasm` and `hosts/tcc-evm` were
 also compared separately and are the same. There is no change to `src/`
 in this repository.
+
+Status 2026-10-08: chunk 9 staged. Chunk 9 opens M6. Section 9 has the
+rulings of O3 (with b1 to b9 and D0), O4 and O7 (with its defaults and
+D0). The table above has the M6 rows, chunks 9 to 14. `probe/CAPABILITY.md`
+gives the M6 plan. Its title stays (M5), because chunk 9 does not change
+the capability. `tools/port.py` maps 44 source files to the kit
+`hosts/tcc-evm-anchor` and applies the M5 renames. `--write KIT` writes
+them, and `--check KIT` compares them. The script never writes the
+kit-owned files: `README.md`, `FORMERS.md`, `Makefile`, `.gitignore`,
+`docs/` and `test/gate.sh`. Before writing, it refuses missing or empty
+source groups, duplicate kit paths, symlinks, multiply linked target
+files, obstructed target paths and a kit that is the source root. These
+refusals and I/O errors exit 2. There is no change to `src/`. Gate GREEN:
+`make`, `make check-clang`, `make test` (273 compiler cases, the counts
+of M4, plus 13 port-script regressions in `tools/test_port.py`).
+`--check` on the lang-template kit (2a88a3a) exits 0 with 44 files.
+`--write` into a copy of the kit without its mapped files, then `diff -r`
+with the kit, is empty. A copy with one changed byte, a copy with one
+mapped file removed and a copy with one extra file each make `--check`
+exit 1.

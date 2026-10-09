@@ -1,6 +1,6 @@
-# anchor-lang host capability: TinyCC to EVM (M6 chunk 11, 2026-10-09)
+# anchor-lang host capability: TinyCC to EVM (M6 chunk 12, 2026-10-09)
 
-This file records what the `tcc-evm` host can do at the end of chunk 11
+This file records what the `tcc-evm` host can do at the end of chunk 12
 (SPEC section 10). The host is the C99 compiler `anchorc`, built by
 TinyCC. The target is EVM bytecode for one contract. Each fact cites a file
 or a test. PLANNED work has no evidence yet.
@@ -121,9 +121,10 @@ tabulates the rule and makes the full fork check.
 
 ## Planned
 
-M6 (SPEC section 10, chunks 9 to 14). Chunk 9 adds `tools/port.py` and
-no capability. Chunks 10 to 12 add a list of constitutions at compile time
-and a guarded `amend(uint256)` entry (O3). Chunk 13 adds a
+M6 (SPEC section 10, chunks 9 to 14). Chunks 9 to 12 are done: chunk 9
+adds `tools/port.py` and no capability, and chunks 10 to 12 add a list of
+constitutions at compile time, a guarded `amend(uint256)` entry and its
+chain tests (O3, see `## Compiler` and `## Gates`). Chunk 13 adds a
 `dispute(bytes32,uint256,bytes32)` entry that writes no storage (O7).
 Chunk 14 ports the host again to the M5 kit, lang-template
 `hosts/tcc-evm-anchor`, with `tools/port.py`. `HashDom` stays `nonZero`
@@ -131,13 +132,14 @@ only (O4, SPEC section 9).
 
 ## Gates (2026-10-09)
 
-All GREEN on the chunk 11 tree:
+All GREEN on the chunk 12 tree:
 
 - `make` (tcc `-Wall -Werror`).
 - `make check-clang`.
 - `make test`: `test/parse.sh` 45 cases (20 round trips), `test/evm.sh` 9
   cases, `test/check.sh` 52 cases, `test/table.sh` 21 cases,
   `test/eval.sh` 34 cases, including both recursive prelude defs and both
-  laws of F13, `test/build.sh` 46 cases, `test/run.sh` 40 cases, `test/deploy.sh` 13
-  cases, `test/diff.sh` 45 cases and `test/laws.sh` 23 cases, the last
-  four on geth `evm` 1.14.12 (328 cases in all).
+  laws of F13, `test/build.sh` 46 cases, `test/run.sh` 40 cases, `test/deploy.sh` 17
+  cases, `test/diff.sh` 65 cases (5 traces; trace E calls `amend`) and
+  `test/laws.sh` 30 cases (with the `amend` laws of O3), the last four on
+  geth `evm` 1.14.12 (359 cases in all).

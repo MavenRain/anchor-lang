@@ -1,14 +1,16 @@
 #!/bin/sh
-# Differential tests of anchorc (SPEC section 10, chunk 6), run by make
-# test after make. Four fixed traces of calls run on geth evm, each from a
-# deploy: one evm run for each call, on the storage after the last call. A
-# model in awk predicts each call from the anchorc table (the members, the
-# candidates, the admit and the schema of each policy, the outcome of each
-# tally) and the slot rules of SPEC section 7: the result (a revert or the
-# output word), the log and the full storage after the call. Each case
-# compares the prediction with the evm result. The model reads the table of
-# anchorc, so these tests check the contract against the table; test/table.sh
-# checks the table. With no evm on the PATH, the tests are skipped.
+# Differential tests of anchorc (SPEC section 10, chunks 6 and 12), run by
+# make test after make. Five fixed traces of calls run on geth evm, each
+# from a deploy: one evm run for each call, on the storage after the last
+# call. A model in awk predicts each call from the anchorc table (the
+# members, the candidates, the constitutions, the admit, the schema and the
+# amendTo mask of each policy, the outcome of each tally under each
+# constitution) and the slot rules of SPEC section 7: the result (a revert
+# or the output word), the log and the full storage after the call. Each
+# case compares the prediction with the evm result. The model reads the
+# table of anchorc, so these tests check the contract against the table;
+# test/table.sh checks the table. With no evm on the PATH, the tests are
+# skipped.
 root=$(cd "$(dirname "$0")/.." && pwd)
 if ! command -v evm > /dev/null 2>&1; then
   echo 'diff.sh: no evm on the PATH, skipped'
@@ -18,6 +20,7 @@ out=$root/build/test/chain/diff
 . "$root/test/evmchain.sh"
 
 topic=$(keccak "$(text 'Anchored(bytes32,uint256)')")
+amended=$(keccak "$(text 'Amended(uint256)')")
 h1=$(keccak "$(text 'anchor-lang diff h1')")
 h2=$(keccak "$(text 'anchor-lang diff h2')")
 h3=$(keccak "$(text 'anchor-lang diff h3')")
@@ -58,7 +61,14 @@ pairkey() {
 # pair slot is set, else 0. cast c by s reverts when s is not a member or
 # c is not below K; it moves the ballot of s to c, and reverts when the
 # tallies before and after are both one and the schema goes down (O6).
-# Other call data reverts.
+# Each tally is the tally under the current constitution c, slot K + M (0
+# for a program with one constitution). amend k by s reverts when s is not
+# a member or the program has one constitution; it changes nothing when k
+# is c; it reverts when k is not below C, the outcome of the current tally
+# under c is not one, bit k of the amendTo mask of its policy is 0, or the
+# tallies under c and under k are both one and the schema goes down (O6);
+# else slot K + M becomes k and the log Amended gives k. Other call data
+# reverts.
 model_awk='
 function num(x,   n, j) {
   n = 0
@@ -69,11 +79,15 @@ function key(n) { return sprintf("%064x", n) }
 function get(n) { return (key(n) in st) ? num(st[key(n)]) : 0 }
 function put(n, v) { if (v == 0) delete st[key(n)]; else st[key(n)] = sprintf("%064x", v) }
 function row(   j, r) { r = ""; for (j = 0; j < K; j++) r = r " " get(j); return r }
+BEGIN { C = 1; cur = 0 }
 FILENAME == tablef && $1 == "members" { M = $2 + 0 }
 FILENAME == tablef && $1 == "candidates" { K = $2 + 0 }
+FILENAME == tablef && $1 == "constitutions" { C = $2 + 0 }
 FILENAME == tablef && $1 == "policy" { admit[$2] = $4; schema[$2] = $8 + 0 }
+FILENAME == tablef && $1 == "amendTo" { mask[$2] = $3 }
+FILENAME == tablef && $1 == "constitution" { cur = $2 + 0 }
 FILENAME == tablef && $1 == "tally" {
-  r = ""
+  r = cur
   for (j = 2; $j != ":"; j++) r = r " " $j
   fate[r] = $(j + 1)
   pol[r] = $(j + 2)
@@ -86,8 +100,9 @@ END {
   tw = sprintf("%064x", time)
   result = "revert"
   logline = ""
+  con = get(K + M)
   if (kind == "anchor") {
-    r = row()
+    r = con row()
     if ((sender in pos) && a != zero && fate[r] == "one" && admit[pol[r]] == "allow") {
       result = "0x" tw
       k = pk[a " " tw]
@@ -101,16 +116,29 @@ END {
       i = pos[sender]
       old = get(K + i)
       c = a + 0
-      before = row()
+      before = con row()
       put(old, get(old) - 1)
       put(c, get(c) + 1)
       put(K + i, c)
-      after = row()
+      after = con row()
       if (fate[before] == "one" && fate[after] == "one" && schema[pol[after]] < schema[pol[before]]) {
         put(c, get(c) - 1)
         put(old, get(old) + 1)
         put(K + i, old)
       } else result = "0x"
+    }
+  } else if (kind == "amend") {
+    k = a + 0
+    r = row()
+    if ((sender in pos) && C > 1) {
+      if (k == con) result = "0x"
+      else if (k < C && fate[con r] == "one" && substr(mask[pol[con r]], k + 1, 1) == "1") {
+        if (!(fate[k r] == "one" && schema[pol[k r]] < schema[pol[con r]])) {
+          put(K + M, k)
+          result = "0x"
+          logline = "log " amended " " sprintf("%064x", k)
+        }
+      }
     }
   }
   print "result " result
@@ -122,7 +150,7 @@ END {
 # model KIND SENDER TIME A B: want gets the prediction of the model for one
 # call on the storage in model; model gets the storage after the call.
 model() {
-  awk -v kind="$1" -v sender="$2" -v time="$3" -v a="$4" -v b="$5" -v topic="$topic" -v zero="$zero" \
+  awk -v kind="$1" -v sender="$2" -v time="$3" -v a="$4" -v b="$5" -v topic="$topic" -v amended="$amended" -v zero="$zero" \
     -v tablef="$out/table.out" -v keysf="$out/keys" -v statef="$out/model" -v nextf="$out/model.next" \
     "$model_awk" "$out/table.out" "$out/keys" "$out/model" > "$out/want"
   sort "$out/model.next" > "$out/model"
@@ -145,7 +173,7 @@ trace() {
 }
 
 # call LABEL TIME SENDER KIND [ARG [ARG]]: one call of a trace. KIND is
-# anchor h, verify h t, cast c or raw HEX. The case passes when the model
+# anchor h, verify h t, cast c, amend k or raw HEX. The case passes when the model
 # and evm give the same result, log and storage.
 call() {
   _s=$(addr "$3")
@@ -163,6 +191,9 @@ call() {
     cast)
       _a=$5
       _in=$(cast_in "$5") ;;
+    amend)
+      _a=$5
+      _in=$(amend_in "$5") ;;
     raw)
       _in=$5 ;;
   esac
@@ -241,5 +272,32 @@ call 'D 1' 4660 m0 anchor h1
 call 'D 2' 4660 m1 cast 1
 call 'D 3' 4661 m1 anchor h1
 summary D 0 2 0
+
+# Trace E: arrow-debreu-amend (M 3, K 2, C 2) with the schema 2 in
+# closedLog. Under constitution 0, tallies 3 0 and 2 1 are one 0 (allow,
+# schema 1), 1 2 and 0 3 are one 1 (deny, schema 2). Under constitution 1,
+# only 3 0 is one 0. Policy 0 may amend to 0 and 1, policy 1 only to 0.
+awk '/^def closedLog/ { sub(/ 0 1 flagYes/, " 0 2 flagYes") } { print }' \
+  "$programs/arrow-debreu-amend.anc" > "$out/amend-schema-2.anc"
+trace E "$out/amend-schema-2.anc"
+call 'E 1' 4660 m0 anchor h1
+call 'E 2' 4660 m0 amend 0
+call 'E 3' 4661 x amend 1
+call 'E 4' 4661 m1 amend 2
+call 'E 5' 4661 m1 amend 1
+call 'E 6' 4661 m2 amend 1
+call 'E 7' 4662 m2 anchor h2
+call 'E 8' 4662 m0 cast 1
+call 'E 9' 4663 m1 anchor h3
+call 'E 10' 4663 m1 amend 0
+call 'E 11' 4663 m0 cast 0
+call 'E 12' 4664 m1 cast 1
+call 'E 13' 4664 m2 amend 0
+call 'E 14' 4665 m0 amend 1
+call 'E 15' 4665 m0 anchor h4
+call 'E 16' 4666 m2 cast 1
+call 'E 17' 4666 x verify h1 4660
+call 'E 18' 4666 m0 raw 00000000
+summary E 4 8 2
 
 finish diff.sh

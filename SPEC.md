@@ -549,6 +549,23 @@ checked program owns them. My choice, not ruled: the amend cases are in
 `test/run.sh` on prestates (a prestate with slot K + M = 1 is the storage
 after `amend(1)`), and `test/diff.sh` and `test/laws.sh` keep their cases.
 
+Chunk 12 tests `amend` on the chain (row 12). `test/laws.sh` deploys
+`arrow-debreu-amend.anc` and tests two laws. `amend` is the identity on the
+pairs: `amend(1)` changes only slot K + M, and `amend(0)` after it gives the
+storage before it. The canonical `amend(c)`, with c the current
+constitution, changes nothing and makes no log (b3). The cases of the 3
+programs with C = 1, whose `amend` selectors revert, stay (b8). The awk
+model of `test/diff.sh` reads `constitutions`, the `amendTo` masks and the
+row block of each constitution from `anchorc table`, and it reads the row of
+a tally under the constitution in slot K + M. Trace E calls `anchor`,
+`cast`, `verify` and `amend` (18 calls). `test/deploy.sh` deploys the new
+program and runs `amend(1)` on the deployed state. My choice, not ruled:
+trace E runs on `arrow-debreu-amend.anc` with the schema 2 in `closedLog`,
+so that the O6 guard of `amend` refuses one call. My choice, not ruled: in
+the chain tests, the line of a log with one topic is `log TOPIC0 DATA`.
+The chain reader preserves all topics, so an extra topic fails the
+differential comparison. `test/deploy.sh` has a LOG3 regression case.
+
 `anchorc eval PROG NAME` (chunk 4b) prints the normal form of the def NAME
 of the prelude or PROG, including a prelude `def rec`, in the canonical
 form of the printer, then exits 0. A recursive def prints its normalized
@@ -902,3 +919,15 @@ check-clang`, `make test` (328 compiler cases: parse 45, evm 9, check 52,
 table 21, eval 34, build 46, run 40, deploy 13, diff 45, laws 23; plus 13
 port-script regressions). `--check` on the lang-template kit exits 1 and
 lists only the chunk 10 and 11 paths.
+
+Status 2026-10-09: chunk 12 staged. The chain tests of O3 (section 7):
+`test/laws.sh` tests that `amend` is the identity on the pairs and that the
+canonical `amend` changes nothing, `test/diff.sh` has the constitution slot
+in its awk model and trace E with `amend`, and `test/deploy.sh` deploys
+`arrow-debreu-amend.anc`. `test/evmchain.sh` adds `amend_in` and reads the
+data and every topic of a log. There is no change to `src/`, so the bytes of
+the 3 programs of M5 do not change. Gate GREEN: `make`, `make check-clang`,
+`make test` (359 compiler cases: parse 45, evm 9, check 52, table 21, eval
+34, build 46, run 40, deploy 17, diff 65, laws 30; plus 13 port-script
+regressions). `--check` on the lang-template kit exits 1 and lists only the
+chunk 10 to 12 paths.
